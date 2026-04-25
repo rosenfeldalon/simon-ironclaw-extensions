@@ -283,11 +283,8 @@ const BOT_USERNAME_PATH: &str = "state/bot_username";
 /// Workspace path for persisting respond_to_all_group_messages flag.
 const RESPOND_TO_ALL_GROUP_PATH: &str = "state/respond_to_all_group_messages";
 
-/// Simon-specific private runtime config persisted across callbacks.
-const SIMON_ALON_ID_PATH: &str = "state/simon_alon_telegram_user_id";
-const SIMON_SHLOMIT_ID_PATH: &str = "state/simon_shlomit_telegram_user_id";
+/// Simon-specific private routing state persisted after verified pairing.
 const SIMON_ALON_CHAT_ID_PATH: &str = "state/simon_alon_telegram_chat_id";
-const SIMON_SHLOMIT_CHAT_ID_PATH: &str = "state/simon_shlomit_telegram_chat_id";
 
 // ============================================================================
 // Channel Metadata
@@ -317,11 +314,11 @@ struct TelegramMessageMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     message_thread_id: Option<i64>,
 
-    /// Simon canonical identity, when resolved from private runtime config.
+    /// Simon canonical identity, when resolved from IronClaw pairing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     simon_identity: Option<String>,
 
-    /// Simon role, when resolved from private runtime config.
+    /// Simon role, when resolved from IronClaw pairing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     simon_role: Option<String>,
 
@@ -401,14 +398,6 @@ struct TelegramConfig {
     /// Poll interval in milliseconds (default 30000).
     #[serde(default)]
     poll_interval_ms: Option<u32>,
-
-    /// Private setup-secret value injected by IronClaw. Do not put this in docs or prompts.
-    #[serde(default, deserialize_with = "deserialize_string_or_number")]
-    simon_alon_telegram_user_id: Option<String>,
-
-    /// Optional future setup-secret value. Shlomit stays unpaired until Alon explicitly approves.
-    #[serde(default, deserialize_with = "deserialize_string_or_number")]
-    simon_shlomit_telegram_user_id: Option<String>,
 }
 
 fn webhook_mode(config: &TelegramConfig) -> bool {
@@ -635,34 +624,9 @@ impl Guest for TelegramChannel {
         let dm_policy = config.dm_policy.as_deref().unwrap_or("pairing").to_string();
         let _ = channel_host::workspace_write(DM_POLICY_PATH, &dm_policy);
 
-        let mut allow_from = config.allow_from.clone().unwrap_or_default();
-        if let Some(ref alon_id) = config.simon_alon_telegram_user_id {
-            allow_from.push(alon_id.clone());
-        }
-        if let Some(ref shlomit_id) = config.simon_shlomit_telegram_user_id {
-            allow_from.push(shlomit_id.clone());
-        }
-        allow_from.sort();
-        allow_from.dedup();
-
-        let allow_from_json =
-            serde_json::to_string(&allow_from).unwrap_or_else(|_| "[]".to_string());
+        let allow_from_json = serde_json::to_string(&config.allow_from.clone().unwrap_or_default())
+            .unwrap_or_else(|_| "[]".to_string());
         let _ = channel_host::workspace_write(ALLOW_FROM_PATH, &allow_from_json);
-
-        let _ = channel_host::workspace_write(
-            SIMON_ALON_ID_PATH,
-            &config
-                .simon_alon_telegram_user_id
-                .clone()
-                .unwrap_or_default(),
-        );
-        let _ = channel_host::workspace_write(
-            SIMON_SHLOMIT_ID_PATH,
-            &config
-                .simon_shlomit_telegram_user_id
-                .clone()
-                .unwrap_or_default(),
-        );
 
         // Persist bot_username and respond_to_all_group_messages for group handling
         let _ = channel_host::workspace_write(
@@ -2201,65 +2165,17 @@ fn read_nonempty_workspace(path: &str) -> Option<String> {
     })
 }
 
-fn simon_identity_for_configured_sender(
-    sender_id: i64,
-    alon_id: Option<&str>,
-    shlomit_id: Option<&str>,
+fn simon_identity_for_resolved_pairing(
+    owner_id: Option<&str>,
 ) -> Option<(&'static str, &'static str)> {
-    let sender = sender_id.to_string();
-    if alon_id == Some(sender.as_str()) {
-        return Some(("alon", "primary_parent_admin"));
-    }
-    if shlomit_id == Some(sender.as_str()) {
-        return Some(("shlomit", "second_parent_partner"));
-    }
-    None
-}
-
-fn simon_identity_for_sender(sender_id: i64) -> Option<(&'static str, &'static str)> {
-    simon_identity_for_configured_sender(
-        sender_id,
-        read_nonempty_workspace(SIMON_ALON_ID_PATH).as_deref(),
-        read_nonempty_workspace(SIMON_SHLOMIT_ID_PATH).as_deref(),
-    )
-}
-
-fn simon_identity_for_message(
-    sender_id: i64,
-    is_private: bool,
-) -> Option<(&'static str, &'static str)> {
-    let alon_id = read_nonempty_workspace(SIMON_ALON_ID_PATH);
-    let shlomit_id = read_nonempty_workspace(SIMON_SHLOMIT_ID_PATH);
-
-    if let Some(identity) =
-        simon_identity_for_configured_sender(sender_id, alon_id.as_deref(), shlomit_id.as_deref())
-    {
-        return Some(identity);
-    }
-
-    if is_private && alon_id.is_none() {
-        let sender_id = sender_id.to_string();
-        if channel_host::workspace_write(SIMON_ALON_ID_PATH, &sender_id).is_ok() {
-            channel_host::log(
-                channel_host::LogLevel::Info,
-                "Bound first private Telegram sender as Simon identity alon",
-            );
-            return Some(("alon", "primary_parent_admin"));
-        }
-
-        channel_host::log(
-            channel_host::LogLevel::Warn,
-            "Failed to persist first private Telegram sender identity binding",
-        );
-    }
-
-    None
+    owner_id
+        .filter(|id| !id.trim().is_empty())
+        .map(|_| ("alon", "primary_parent_admin"))
 }
 
 fn simon_display_name(identity: Option<(&str, &str)>, fallback: String) -> String {
     match identity.map(|(id, _)| id) {
         Some("alon") => "Alon".to_string(),
-        Some("shlomit") => "Shlomit".to_string(),
         _ => fallback,
     }
 }
@@ -2267,7 +2183,6 @@ fn simon_display_name(identity: Option<(&str, &str)>, fallback: String) -> Strin
 fn simon_role_display(role: &str) -> &str {
     match role {
         "primary_parent_admin" => "primary parent admin",
-        "second_parent_partner" => "second parent partner",
         _ => role,
     }
 }
@@ -2288,33 +2203,7 @@ fn content_with_simon_handoff(content: &str, identity: Option<(&str, &str)>) -> 
 fn simon_chat_id_path_for_identity(identity: &str) -> Option<&'static str> {
     match identity {
         "alon" => Some(SIMON_ALON_CHAT_ID_PATH),
-        "shlomit" => Some(SIMON_SHLOMIT_CHAT_ID_PATH),
         _ => None,
-    }
-}
-
-fn send_start_route_fingerprint(
-    chat_id: i64,
-    reply_to_message_id: i64,
-    message_thread_id: Option<i64>,
-    content: &str,
-    identity: Option<(&str, &str)>,
-) {
-    if identity.is_none() || !content.trim().eq_ignore_ascii_case("/start") {
-        return;
-    }
-
-    if let Err(err) = send_message(
-        chat_id,
-        "Simon Telegram Channel v1.4 is active. This private chat is bound as Alon.",
-        Some(reply_to_message_id),
-        None,
-        message_thread_id,
-    ) {
-        channel_host::log(
-            channel_host::LogLevel::Warn,
-            &format!("Failed to send channel route fingerprint: {}", err),
-        );
     }
 }
 
@@ -2363,79 +2252,58 @@ fn handle_message(message: TelegramMessage) {
     }
 
     let is_private = message.chat.chat_type == "private";
-    let simon_identity = simon_identity_for_message(from.id, is_private);
-    let is_simon_verified = simon_identity.is_some();
+    let id_str = from.id.to_string();
+    let resolved_pairing_owner = match channel_host::pairing_resolve_identity(CHANNEL_NAME, &id_str)
+    {
+        Ok(owner_id) => owner_id,
+        Err(e) => {
+            channel_host::log(
+                channel_host::LogLevel::Warn,
+                &format!("Pairing identity resolution failed: {}", e),
+            );
+            None
+        }
+    };
+    let simon_identity = simon_identity_for_resolved_pairing(resolved_pairing_owner.as_deref());
 
-    let owner_id = channel_host::workspace_read(OWNER_ID_PATH)
-        .filter(|s| !s.is_empty())
-        .and_then(|s| s.parse::<i64>().ok());
-    let is_owner = owner_id == Some(from.id);
-
-    if !is_owner && !is_simon_verified {
-        // Non-owner senders remain guests. Apply authorization based on
-        // dm_policy / allow_from before letting them chat in their own scope.
-        let dm_policy =
-            channel_host::workspace_read(DM_POLICY_PATH).unwrap_or_else(|| "pairing".to_string());
-
-        // For private chats with non-open policy, check allowlist
-        // For group chats with non-open policy, also check allowlist
-        if dm_policy != "open" {
-            // Build effective allow list: config allow_from + pairing store
-            let mut allowed: Vec<String> = channel_host::workspace_read(ALLOW_FROM_PATH)
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default();
-
-            if let Ok(store_allowed) = channel_host::pairing_read_allow_from(CHANNEL_NAME) {
-                allowed.extend(store_allowed);
-            }
-
-            let id_str = from.id.to_string();
+    if simon_identity.is_none() {
+        if is_private {
             let username_opt = from.username.as_deref();
-            let is_allowed = allowed.contains(&"*".to_string())
-                || allowed.contains(&id_str)
-                || username_opt.is_some_and(|u| allowed.contains(&u.to_string()));
+            let meta = serde_json::json!({
+                "chat_id": message.chat.id,
+                "user_id": from.id,
+                "username": username_opt,
+            })
+            .to_string();
 
-            if !is_allowed {
-                if is_private && dm_policy == "pairing" {
-                    // Upsert pairing request and send reply (only for private chats)
-                    let meta = serde_json::json!({
-                        "chat_id": message.chat.id,
-                        "user_id": from.id,
-                        "username": username_opt,
-                    })
-                    .to_string();
-
-                    match channel_host::pairing_upsert_request(CHANNEL_NAME, &id_str, &meta) {
-                        Ok(result) => {
-                            channel_host::log(
-                                channel_host::LogLevel::Info,
-                                &format!(
-                                    "Pairing request for user {} (chat {}): code {}",
-                                    from.id, message.chat.id, result.code
-                                ),
-                            );
-                            let _ = send_pairing_reply(message.chat.id, &result.code);
-                        }
-                        Err(e) => {
-                            channel_host::log(
-                                channel_host::LogLevel::Error,
-                                &format!("Pairing upsert failed: {}", e),
-                            );
-                        }
-                    }
-                } else if !is_private {
-                    // For group chats with non-open dm_policy, just log and drop
+            match channel_host::pairing_upsert_request(CHANNEL_NAME, &id_str, &meta) {
+                Ok(result) => {
                     channel_host::log(
-                        channel_host::LogLevel::Debug,
+                        channel_host::LogLevel::Info,
                         &format!(
-                            "Dropping message from unauthorized user {} in group chat",
-                            from.id
+                            "Pairing request for user {} (chat {}): code {}",
+                            from.id, message.chat.id, result.code
                         ),
                     );
+                    let _ = send_pairing_reply(message.chat.id, &result.code);
                 }
-                return;
+                Err(e) => {
+                    channel_host::log(
+                        channel_host::LogLevel::Error,
+                        &format!("Pairing upsert failed: {}", e),
+                    );
+                }
             }
+        } else if !is_private {
+            channel_host::log(
+                channel_host::LogLevel::Debug,
+                &format!(
+                    "Dropping message from unpaired user {} in group chat",
+                    from.id
+                ),
+            );
         }
+        return;
     }
 
     // For group chats, only respond if bot was mentioned or respond_to_all is enabled
@@ -2487,14 +2355,6 @@ fn handle_message(message: TelegramMessage) {
                 let _ = channel_host::workspace_write(path, &message.chat.id.to_string());
             }
         }
-
-        send_start_route_fingerprint(
-            message.chat.id,
-            message.message_id,
-            message.message_thread_id,
-            &content,
-            simon_identity,
-        );
     }
 
     // Build metadata for response routing
@@ -2946,47 +2806,25 @@ mod tests {
         let json = r#"{
             "bot_username": "my_bot",
             "owner_id": 42,
-            "respond_to_all_group_messages": true,
-            "simon_alon_telegram_user_id": 123,
-            "simon_shlomit_telegram_user_id": "456"
+            "respond_to_all_group_messages": true
         }"#;
         let config: TelegramConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.bot_username, Some("my_bot".to_string()));
         assert_eq!(config.owner_id, Some("42".to_string()));
-        assert_eq!(config.simon_alon_telegram_user_id, Some("123".to_string()));
-        assert_eq!(
-            config.simon_shlomit_telegram_user_id,
-            Some("456".to_string())
-        );
         assert!(config.respond_to_all_group_messages);
     }
 
     #[test]
-    fn test_simon_identity_for_configured_sender_matches_alon() {
+    fn test_simon_identity_for_resolved_pairing_maps_to_alon() {
         assert_eq!(
-            simon_identity_for_configured_sender(123, Some("123"), None),
+            simon_identity_for_resolved_pairing(Some("owner")),
             Some(("alon", "primary_parent_admin"))
         );
     }
 
     #[test]
-    fn test_simon_identity_for_configured_sender_matches_shlomit() {
-        assert_eq!(
-            simon_identity_for_configured_sender(456, Some("123"), Some("456")),
-            Some(("shlomit", "second_parent_partner"))
-        );
-    }
-
-    #[test]
-    fn test_simon_identity_for_configured_sender_ignores_empty_or_unknown() {
-        assert_eq!(
-            simon_identity_for_configured_sender(789, Some(""), Some("456")),
-            None
-        );
-        assert_eq!(
-            simon_identity_for_configured_sender(789, Some("123"), Some("456")),
-            None
-        );
+    fn test_simon_identity_for_unresolved_pairing_is_none() {
+        assert_eq!(simon_identity_for_resolved_pairing(None), None);
     }
 
     #[test]
