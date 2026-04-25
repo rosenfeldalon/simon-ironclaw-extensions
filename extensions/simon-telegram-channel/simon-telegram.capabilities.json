@@ -1,0 +1,84 @@
+{
+  "version": "1.4",
+  "wit_version": "0.3.0",
+  "type": "channel",
+  "name": "simon_telegram_channel",
+  "description": "Simon Telegram channel based on IronClaw's built-in Telegram channel, with private first-DM identity binding, compact canonical identity handoff, and a /start route fingerprint.",
+  "auth": {
+    "secret_name": "simon_telegram_channel_bot_token",
+    "display_name": "Simon Telegram",
+    "instructions": "Get your bot token from @BotFather on Telegram (https://t.me/BotFather). Send /newbot or /token to get it.",
+    "setup_url": "https://t.me/BotFather",
+    "token_hint": "Looks like 123456789:AABBccDDeeFFgg...",
+    "env_var": "SIMON_TELEGRAM_CHANNEL_BOT_TOKEN"
+  },
+  "setup": {
+    "required_secrets": [
+      {
+        "name": "simon_telegram_channel_bot_token",
+        "prompt": "Enter your Telegram Bot API token (from @BotFather)",
+        "optional": false
+      },
+      {
+        "name": "simon_telegram_channel_webhook_secret",
+        "prompt": "Webhook secret (leave empty to auto-generate)",
+        "optional": true,
+        "auto_generate": {
+          "length": 64
+        }
+      }
+    ],
+    "setup_url": "https://t.me/BotFather",
+    "validation_endpoint": "https://api.telegram.org/bot{simon_telegram_channel_bot_token}/getMe"
+  },
+  "capabilities": {
+    "http": {
+      "allowlist": [
+        { "host": "api.telegram.org", "path_prefix": "/bot" },
+        { "host": "api.telegram.org", "path_prefix": "/file/bot" }
+      ],
+      "credentials": {
+        "telegram_bot": {
+          "secret_name": "simon_telegram_channel_bot_token",
+          "location": {
+            "type": "url_path",
+            "placeholder": "{SIMON_TELEGRAM_CHANNEL_BOT_TOKEN}"
+          },
+          "host_patterns": ["api.telegram.org"]
+        }
+      },
+      "max_response_bytes": 52428800,
+      "rate_limit": {
+        "requests_per_minute": 30,
+        "requests_per_hour": 1000
+      }
+    },
+    "secrets": {
+      "allowed_names": ["simon_telegram_channel_*"]
+    },
+    "channel": {
+      "allowed_paths": ["/webhook/telegram"],
+      "allow_polling": true,
+      "min_poll_interval_ms": 30000,
+      "workspace_prefix": "channels/simon_telegram_channel/",
+      "emit_rate_limit": {
+        "messages_per_minute": 100,
+        "messages_per_hour": 5000
+      },
+      "webhook": {
+        "secret_header": "X-Telegram-Bot-Api-Secret-Token",
+        "secret_name": "simon_telegram_channel_webhook_secret"
+      }
+    }
+  },
+  "config": {
+    "bot_username": null,
+    "owner_id": null,
+    "respond_to_all_group_messages": false,
+    "webhook_enabled": false,
+    "polling_enabled": false,
+    "poll_interval_ms": 30000,
+    "dm_policy": "pairing",
+    "allow_from": []
+  }
+}
