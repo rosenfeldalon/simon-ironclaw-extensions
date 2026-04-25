@@ -1,9 +1,9 @@
 {
-  "version": "1.5",
+  "version": "1.6",
   "wit_version": "0.3.0",
   "type": "channel",
   "name": "simon_telegram_channel",
-  "description": "Simon Telegram channel based on IronClaw's built-in Telegram channel, with pairing-backed canonical identity handoff.",
+  "description": "Simon Telegram channel based on IronClaw's built-in Telegram channel, with built-in-style pairing admission and Simon identity handoff.",
   "auth": {
     "secret_name": "simon_telegram_channel_bot_token",
     "display_name": "Simon Telegram",

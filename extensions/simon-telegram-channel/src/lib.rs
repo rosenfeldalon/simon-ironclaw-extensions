@@ -2165,12 +2165,8 @@ fn read_nonempty_workspace(path: &str) -> Option<String> {
     })
 }
 
-fn simon_identity_for_resolved_pairing(
-    owner_id: Option<&str>,
-) -> Option<(&'static str, &'static str)> {
-    owner_id
-        .filter(|id| !id.trim().is_empty())
-        .map(|_| ("alon", "primary_parent_admin"))
+fn simon_identity_for_admitted_sender(is_admitted: bool) -> Option<(&'static str, &'static str)> {
+    is_admitted.then_some(("alon", "primary_parent_admin"))
 }
 
 fn simon_display_name(identity: Option<(&str, &str)>, fallback: String) -> String {
@@ -2190,7 +2186,7 @@ fn simon_role_display(role: &str) -> &str {
 fn content_with_simon_handoff(content: &str, identity: Option<(&str, &str)>) -> String {
     match identity {
         Some((canonical_id, role)) => format!(
-            "<<CHANNEL_CONTEXT sender_id=\"{}\" sender_name=\"{}\" sender_role=\"{}\" identity_verified=\"true\">>\n<<USER_MESSAGE>>\n{}\n<</USER_MESSAGE>>",
+            "Simon Telegram verified sender context:\n- canonical_id: {}\n- display_name: {}\n- role: {}\n- identity_verified: true\n\nUser message:\n{}",
             canonical_id,
             simon_display_name(Some((canonical_id, role)), canonical_id.to_string()),
             simon_role_display(role),
@@ -2204,6 +2200,42 @@ fn simon_chat_id_path_for_identity(identity: &str) -> Option<&'static str> {
     match identity {
         "alon" => Some(SIMON_ALON_CHAT_ID_PATH),
         _ => None,
+    }
+}
+
+fn pairing_store_allows_sender(sender_id: &str, username: Option<&str>) -> bool {
+    match channel_host::pairing_read_allow_from(CHANNEL_NAME) {
+        Ok(mut allowed) => {
+            allowed.extend(
+                channel_host::workspace_read(ALLOW_FROM_PATH)
+                    .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+                    .unwrap_or_default(),
+            );
+            allowed.contains(&"*".to_string())
+                || allowed.iter().any(|allowed| allowed == sender_id)
+                || username
+                    .is_some_and(|username| allowed.iter().any(|allowed| allowed == username))
+        }
+        Err(e) => {
+            channel_host::log(
+                channel_host::LogLevel::Warn,
+                &format!("Pairing allow-list read failed: {}", e),
+            );
+            false
+        }
+    }
+}
+
+fn resolved_pairing_owner_for_sender(sender_id: &str) -> Option<String> {
+    match channel_host::pairing_resolve_identity(CHANNEL_NAME, sender_id) {
+        Ok(owner_id) => owner_id.filter(|id| !id.trim().is_empty()),
+        Err(e) => {
+            channel_host::log(
+                channel_host::LogLevel::Warn,
+                &format!("Pairing identity resolution failed: {}", e),
+            );
+            None
+        }
     }
 }
 
@@ -2253,22 +2285,18 @@ fn handle_message(message: TelegramMessage) {
 
     let is_private = message.chat.chat_type == "private";
     let id_str = from.id.to_string();
-    let resolved_pairing_owner = match channel_host::pairing_resolve_identity(CHANNEL_NAME, &id_str)
-    {
-        Ok(owner_id) => owner_id,
-        Err(e) => {
-            channel_host::log(
-                channel_host::LogLevel::Warn,
-                &format!("Pairing identity resolution failed: {}", e),
-            );
-            None
-        }
-    };
-    let simon_identity = simon_identity_for_resolved_pairing(resolved_pairing_owner.as_deref());
+    let username_opt = from.username.as_deref();
+    let owner_id = channel_host::workspace_read(OWNER_ID_PATH)
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.parse::<i64>().ok());
+    let is_owner = owner_id == Some(from.id);
+    let is_resolved_pairing = resolved_pairing_owner_for_sender(&id_str).is_some();
+    let is_allowed_sender = pairing_store_allows_sender(&id_str, username_opt);
+    let simon_identity =
+        simon_identity_for_admitted_sender(is_owner || is_resolved_pairing || is_allowed_sender);
 
     if simon_identity.is_none() {
         if is_private {
-            let username_opt = from.username.as_deref();
             let meta = serde_json::json!({
                 "chat_id": message.chat.id,
                 "user_id": from.id,
@@ -2815,16 +2843,16 @@ mod tests {
     }
 
     #[test]
-    fn test_simon_identity_for_resolved_pairing_maps_to_alon() {
+    fn test_simon_identity_for_admitted_sender_maps_to_alon() {
         assert_eq!(
-            simon_identity_for_resolved_pairing(Some("owner")),
+            simon_identity_for_admitted_sender(true),
             Some(("alon", "primary_parent_admin"))
         );
     }
 
     #[test]
-    fn test_simon_identity_for_unresolved_pairing_is_none() {
-        assert_eq!(simon_identity_for_resolved_pairing(None), None);
+    fn test_simon_identity_for_unadmitted_sender_is_none() {
+        assert_eq!(simon_identity_for_admitted_sender(false), None);
     }
 
     #[test]
@@ -2832,12 +2860,13 @@ mod tests {
         let content =
             content_with_simon_handoff("who am i?", Some(("alon", "primary_parent_admin")));
 
-        assert!(content.starts_with(
-            "<<CHANNEL_CONTEXT sender_id=\"alon\" sender_name=\"Alon\" sender_role=\"primary parent admin\" identity_verified=\"true\">>"
-        ));
-        assert!(content.contains("<<USER_MESSAGE>>\nwho am i?\n<</USER_MESSAGE>>"));
+        assert!(content.starts_with("Simon Telegram verified sender context:"));
+        assert!(content.contains("- canonical_id: alon"));
+        assert!(content.contains("- display_name: Alon"));
+        assert!(content.contains("- role: primary parent admin"));
+        assert!(content.contains("- identity_verified: true"));
+        assert!(content.contains("User message:\nwho am i?"));
         assert!(!content.contains("123"));
-        assert!(!content.contains("Simon channel handoff"));
     }
 
     #[test]

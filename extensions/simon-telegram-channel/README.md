@@ -2,7 +2,7 @@
 
 This is the intended IronClaw-native wrapper for Simon's Telegram path.
 
-It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1` clone proved that the package installs and activates as `CHANNEL` when installed with explicit `kind: "wasm_channel"`. The current `1.5` layer preserves token-only setup and uses IronClaw's official pairing store as the identity boundary before emitting canonical Simon identity.
+It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1` clone proved that the package installs and activates as `CHANNEL` when installed with explicit `kind: "wasm_channel"`. The current `1.6` layer restores built-in-style owner/pairing admission and adds Simon identity context for admitted Telegram senders.
 
 ## Current Scope
 
@@ -11,9 +11,9 @@ It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1`
 - Uses WIT `near:agent@0.3.0`.
 - Uses the private setup secret `simon_telegram_channel_bot_token` so it does not collide with the built-in Telegram channel token.
 - Sends official pairing-code instructions to unpaired private Telegram senders and does not emit those messages to the agent.
-- Resolves paired senders with `pairing_resolve_identity("simon_telegram_channel", <telegram_user_id>)`.
-- Treats a successfully paired sender as canonical `alon` with role `primary_parent_admin` for this slice.
-- Prepends a compact `CHANNEL_CONTEXT` block only to pairing-verified messages so the agent sees the canonical sender identity even if hidden channel metadata is not used in the reply.
+- Admits senders through built-in-style `owner_id`, `pairing_read_allow_from`, and `pairing_resolve_identity` checks.
+- Treats an admitted sender as canonical `alon` with role `primary_parent_admin` for this slice.
+- Prepends a plain-text Simon Telegram verified-sender context to admitted messages so the agent sees the canonical sender identity.
 - Leaves Shlomit unpaired/TBD until Alon explicitly approves a future path.
 - Produces an upload bundle with canonical filenames:
   - `simon_telegram_channel.wasm`
@@ -61,11 +61,13 @@ URL: <direct HTTPS URL ending in simon_telegram_channel.tar.gz>
 
 Do not use the Settings import flow for this bundle; that endpoint expects a settings JSON export.
 
-For the current `1.5` rebuild, use the public distribution bundle after the tag is pushed:
+For the current `1.6` rebuild, use the public distribution bundle:
 
 ```text
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.5/bundles/simon_telegram_channel/1.5.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.6/bundles/simon_telegram_channel/1.6.tar.gz
 ```
+
+Do not use raw GitHub URLs from private `simon-docs` for hosted installs.
 
 For local CLI or self-hosted installs, if channel installation from a local file is available:
 

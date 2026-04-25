@@ -13,13 +13,13 @@ This repo intentionally contains only distributable extension source, release bu
 The current public bundle is:
 
 ```text
-bundles/simon_telegram_channel/1.5.tar.gz
+bundles/simon_telegram_channel/1.6.tar.gz
 ```
 
-After pushing tag `ironclaw-simon-telegram-1.5`, the direct install URL is:
+After pushing tag `ironclaw-simon-telegram-1.6`, the direct install URL is:
 
 ```text
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.5/bundles/simon_telegram_channel/1.5.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.6/bundles/simon_telegram_channel/1.6.tar.gz
 ```
 
 Install through IronClaw's extension URL installer/API with explicit channel kind:
@@ -27,7 +27,7 @@ Install through IronClaw's extension URL installer/API with explicit channel kin
 ```json
 {
   "name": "simon_telegram_channel",
-  "url": "https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.5/bundles/simon_telegram_channel/1.5.tar.gz",
+  "url": "https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.6/bundles/simon_telegram_channel/1.6.tar.gz",
   "kind": "wasm_channel"
 }
 ```
@@ -39,7 +39,7 @@ Do not use the Settings import flow for this `.tar.gz`; that path is for setting
 ```bash
 rustup target add wasm32-wasip2
 cargo fmt --check && cargo test --manifest-path extensions/simon-telegram-channel/Cargo.toml
-IRONCLAW_SIMON_BUNDLE_VERSION=1.5 ./scripts/build-ironclaw-upload-bundles.sh
+IRONCLAW_SIMON_BUNDLE_VERSION=1.6 ./scripts/build-ironclaw-upload-bundles.sh
 ```
 
 The build script writes:
@@ -58,7 +58,7 @@ Use placeholders only. Do not commit real Telegram IDs, usernames, bot tokens, w
 Before sharing an install URL, verify the pushed raw GitHub URL returns `200` and inspect the packaged capabilities JSON for:
 
 - `name: "simon_telegram_channel"`
-- `version: "1.5"`
+- `version: "1.6"`
 - `type: "channel"`
 - `wit_version: "0.3.0"`
 

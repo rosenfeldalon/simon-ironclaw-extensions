@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6
+
+- Restores built-in-style Telegram admission using owner, allow-list, and pairing signals before emitting messages to Simon.
+- Sends the official pairing-code reply for unadmitted private senders and stops before the agent sees the message.
+- Emits a plain-text verified Simon sender context for admitted Alon messages.
+- Packaged as an IronClaw channel bundle with `type: "channel"` and WIT `0.3.0`.
+
 ## 1.5
 
 - Restored official IronClaw pairing as the Telegram identity gate via `pairing_resolve_identity`.
