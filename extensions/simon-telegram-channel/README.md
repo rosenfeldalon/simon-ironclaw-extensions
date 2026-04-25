@@ -2,7 +2,7 @@
 
 This is the intended IronClaw-native wrapper for Simon's Telegram path.
 
-It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1` clone proved that the package installs and activates as `CHANNEL` when installed with explicit `kind: "wasm_channel"`. The current `1.7` layer restores built-in-style owner/pairing admission, adds Simon identity context for admitted Telegram senders, and uses the custom channel webhook route.
+It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1` clone proved that the package installs and activates as `CHANNEL` when installed with explicit `kind: "wasm_channel"`. The current `1.8` layer restores built-in-style owner/pairing admission, adds Simon identity context for admitted Telegram senders, uses the custom channel webhook route, and logs hosted admission decisions.
 
 ## Current Scope
 
@@ -62,15 +62,15 @@ URL: <direct HTTPS URL ending in simon_telegram_channel.tar.gz>
 
 Do not use the Settings import flow for this bundle; that endpoint expects a settings JSON export.
 
-For the current `1.7` rebuild, use the public distribution bundle:
+For the current `1.8` rebuild, use the public distribution bundle:
 
 ```text
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.7/bundles/simon_telegram_channel/1.7.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.8/bundles/simon_telegram_channel/1.8.tar.gz
 ```
 
 Do not use raw GitHub URLs from private `simon-docs` for hosted installs.
 
-The `1.7` bundle is published and locally validated through `/Users/alonr/projects/simon-ironclaw-lab` with fake Telegram plus Ollama. The remaining production gate is a hosted/live Telegram transcript proving pairing and durable identity continuity.
+The `1.8` bundle includes the `1.7` route fix plus redacted hosted diagnostics. If hosted logs do not show `Simon Telegram channel runtime version 1.8`, IronClaw is still running an older channel artifact or active runtime.
 
 For local CLI or self-hosted installs, if channel installation from a local file is available:
 

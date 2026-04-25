@@ -276,6 +276,7 @@ const ALLOW_FROM_PATH: &str = "state/allow_from";
 
 /// Channel name for pairing store (used by pairing host APIs).
 const CHANNEL_NAME: &str = "simon_telegram_channel";
+const CHANNEL_VERSION: &str = "1.8";
 const WEBHOOK_PATH: &str = "/webhook/simon_telegram_channel";
 
 /// Workspace path for persisting bot_username for mention detection in groups.
@@ -588,7 +589,13 @@ impl Guest for TelegramChannel {
         let config: TelegramConfig = serde_json::from_str(&config_json)
             .map_err(|e| format!("Failed to parse config: {}", e))?;
 
-        channel_host::log(channel_host::LogLevel::Info, "Telegram channel starting");
+        channel_host::log(
+            channel_host::LogLevel::Info,
+            &format!(
+                "Simon Telegram channel runtime version {} starting on {}",
+                CHANNEL_VERSION, WEBHOOK_PATH
+            ),
+        );
 
         if let Some(ref username) = config.bot_username {
             channel_host::log(
@@ -683,7 +690,7 @@ impl Guest for TelegramChannel {
         let require_secret = config.webhook_secret.is_some();
 
         Ok(ChannelConfig {
-            display_name: "Simon Telegram Baseline".to_string(),
+            display_name: format!("Simon Telegram {}", CHANNEL_VERSION),
             http_endpoints: vec![HttpEndpointConfig {
                 path: WEBHOOK_PATH.to_string(),
                 methods: vec!["POST".to_string()],
@@ -2296,6 +2303,20 @@ fn handle_message(message: TelegramMessage) {
     let simon_identity =
         simon_identity_for_admitted_sender(is_owner || is_resolved_pairing || is_allowed_sender);
 
+    channel_host::log(
+        channel_host::LogLevel::Info,
+        &format!(
+            "Simon Telegram admission decision version={} channel={} private={} owner_match={} resolved_pairing={} allow_list_match={} admitted={}",
+            CHANNEL_VERSION,
+            CHANNEL_NAME,
+            is_private,
+            is_owner,
+            is_resolved_pairing,
+            is_allowed_sender,
+            simon_identity.is_some()
+        ),
+    );
+
     if simon_identity.is_none() {
         if is_private {
             let meta = serde_json::json!({
@@ -2310,8 +2331,8 @@ fn handle_message(message: TelegramMessage) {
                     channel_host::log(
                         channel_host::LogLevel::Info,
                         &format!(
-                            "Pairing request for user {} (chat {}): code {}",
-                            from.id, message.chat.id, result.code
+                            "Simon Telegram pairing request created version={} channel={} code={}",
+                            CHANNEL_VERSION, CHANNEL_NAME, result.code
                         ),
                     );
                     let _ = send_pairing_reply(message.chat.id, &result.code);
@@ -2427,10 +2448,14 @@ fn handle_message(message: TelegramMessage) {
     });
 
     channel_host::log(
-        channel_host::LogLevel::Debug,
+        channel_host::LogLevel::Info,
         &format!(
-            "Emitted message from user {} in chat {}",
-            from.id, message.chat.id
+            "Simon Telegram emitted admitted message version={} channel={} canonical_identity={}",
+            CHANNEL_VERSION,
+            CHANNEL_NAME,
+            simon_identity
+                .map(|(identity, _)| identity)
+                .unwrap_or("none")
         ),
     );
 }
