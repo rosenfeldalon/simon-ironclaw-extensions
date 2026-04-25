@@ -1,5 +1,5 @@
 {
-  "version": "1.6",
+  "version": "1.7",
   "wit_version": "0.3.0",
   "type": "channel",
   "name": "simon_telegram_channel",
@@ -57,7 +57,7 @@
       "allowed_names": ["simon_telegram_channel_*"]
     },
     "channel": {
-      "allowed_paths": ["/webhook/telegram"],
+      "allowed_paths": ["/webhook/simon_telegram_channel"],
       "allow_polling": true,
       "min_poll_interval_ms": 30000,
       "workspace_prefix": "channels/simon_telegram_channel/",

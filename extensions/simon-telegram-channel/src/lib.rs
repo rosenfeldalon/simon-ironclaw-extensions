@@ -276,6 +276,7 @@ const ALLOW_FROM_PATH: &str = "state/allow_from";
 
 /// Channel name for pairing store (used by pairing host APIs).
 const CHANNEL_NAME: &str = "simon_telegram_channel";
+const WEBHOOK_PATH: &str = "/webhook/simon_telegram_channel";
 
 /// Workspace path for persisting bot_username for mention detection in groups.
 const BOT_USERNAME_PATH: &str = "state/bot_username";
@@ -654,7 +655,7 @@ impl Guest for TelegramChannel {
 
                 channel_host::log(
                     channel_host::LogLevel::Info,
-                    &format!("Registering webhook: {}/webhook/telegram", tunnel_url),
+                    &format!("Registering webhook: {}{}", tunnel_url, WEBHOOK_PATH),
                 );
 
                 register_webhook(tunnel_url, config.webhook_secret.as_deref())
@@ -684,7 +685,7 @@ impl Guest for TelegramChannel {
         Ok(ChannelConfig {
             display_name: "Simon Telegram Baseline".to_string(),
             http_endpoints: vec![HttpEndpointConfig {
-                path: "/webhook/telegram".to_string(),
+                path: WEBHOOK_PATH.to_string(),
                 methods: vec!["POST".to_string()],
                 require_secret,
             }],
@@ -1756,7 +1757,7 @@ fn delete_webhook() -> Result<(), String> {
 ///
 /// Called during on_start() when tunnel_url is configured.
 fn register_webhook(tunnel_url: &str, webhook_secret: Option<&str>) -> Result<(), String> {
-    let webhook_url = format!("{}/webhook/telegram", tunnel_url);
+    let webhook_url = format!("{}{}", tunnel_url, WEBHOOK_PATH);
 
     // Build setWebhook request body
     let mut body = serde_json::json!({

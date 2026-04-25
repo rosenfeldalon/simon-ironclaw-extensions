@@ -13,23 +13,23 @@ This repo intentionally contains only distributable extension source, release bu
 The latest public bundle is:
 
 ```text
-bundles/simon_telegram_channel/1.6.tar.gz
+bundles/simon_telegram_channel/1.7.tar.gz
 ```
 
-After pushing tag `ironclaw-simon-telegram-1.6`, the direct install URL is:
+After pushing tag `ironclaw-simon-telegram-1.7`, the direct install URL is:
 
 ```text
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.6/bundles/simon_telegram_channel/1.6.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.7/bundles/simon_telegram_channel/1.7.tar.gz
 ```
 
-Important: `1.6` is published for reproduction and inspection, but it did not pass hosted behavioral acceptance. The channel installed and responded, but the expected built-in-style Telegram pairing handshake and durable Simon identity/context still did not work. Do not treat this bundle as known-good.
+Important: `1.7` fixes the custom channel webhook route to `/webhook/simon_telegram_channel`, matching IronClaw's WASM channel route registration. It is still accepted only after hosted Telegram pairing and identity-continuity smoke tests pass.
 
 Install through IronClaw's extension URL installer/API with explicit channel kind only when intentionally reproducing the failed slice:
 
 ```json
 {
   "name": "simon_telegram_channel",
-  "url": "https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.6/bundles/simon_telegram_channel/1.6.tar.gz",
+  "url": "https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.7/bundles/simon_telegram_channel/1.7.tar.gz",
   "kind": "wasm_channel"
 }
 ```
@@ -41,7 +41,7 @@ Do not use the Settings import flow for this `.tar.gz`; that path is for setting
 ```bash
 rustup target add wasm32-wasip2
 cargo fmt --check && cargo test --manifest-path extensions/simon-telegram-channel/Cargo.toml
-IRONCLAW_SIMON_BUNDLE_VERSION=1.6 ./scripts/build-ironclaw-upload-bundles.sh
+IRONCLAW_SIMON_BUNDLE_VERSION=1.7 ./scripts/build-ironclaw-upload-bundles.sh
 ```
 
 The build script writes:
@@ -60,7 +60,7 @@ Use placeholders only. Do not commit real Telegram IDs, usernames, bot tokens, w
 Before sharing an install URL, verify the pushed raw GitHub URL returns `200` and inspect the packaged capabilities JSON for:
 
 - `name: "simon_telegram_channel"`
-- `version: "1.6"`
+- `version: "1.7"`
 - `type: "channel"`
 - `wit_version: "0.3.0"`
 

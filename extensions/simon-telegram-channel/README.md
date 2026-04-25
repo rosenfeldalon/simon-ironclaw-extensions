@@ -2,12 +2,13 @@
 
 This is the intended IronClaw-native wrapper for Simon's Telegram path.
 
-It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1` clone proved that the package installs and activates as `CHANNEL` when installed with explicit `kind: "wasm_channel"`. The current `1.6` layer restores built-in-style owner/pairing admission and adds Simon identity context for admitted Telegram senders.
+It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1` clone proved that the package installs and activates as `CHANNEL` when installed with explicit `kind: "wasm_channel"`. The current `1.7` layer restores built-in-style owner/pairing admission, adds Simon identity context for admitted Telegram senders, and uses the custom channel webhook route.
 
 ## Current Scope
 
 - Preserves the built-in Telegram channel behavior for polling, webhook handling, pairing, attachments, status updates, and replies.
 - Uses the custom package/install name `simon_telegram_channel`.
+- Uses `/webhook/simon_telegram_channel`, matching IronClaw's installed WASM channel route.
 - Uses WIT `near:agent@0.3.0`.
 - Uses the private setup secret `simon_telegram_channel_bot_token` so it does not collide with the built-in Telegram channel token.
 - Sends official pairing-code instructions to unpaired private Telegram senders and does not emit those messages to the agent.
@@ -61,10 +62,10 @@ URL: <direct HTTPS URL ending in simon_telegram_channel.tar.gz>
 
 Do not use the Settings import flow for this bundle; that endpoint expects a settings JSON export.
 
-For the current `1.6` rebuild, use the public distribution bundle:
+For the current `1.7` rebuild, use the public distribution bundle:
 
 ```text
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.6/bundles/simon_telegram_channel/1.6.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.7/bundles/simon_telegram_channel/1.7.tar.gz
 ```
 
 Do not use raw GitHub URLs from private `simon-docs` for hosted installs.
