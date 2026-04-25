@@ -22,9 +22,9 @@ After pushing tag `ironclaw-simon-telegram-1.7`, the direct install URL is:
 https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.7/bundles/simon_telegram_channel/1.7.tar.gz
 ```
 
-Important: `1.7` fixes the custom channel webhook route to `/webhook/simon_telegram_channel`, matching IronClaw's WASM channel route registration. It is still accepted only after hosted Telegram pairing and identity-continuity smoke tests pass.
+Important: `1.7` fixes the custom channel webhook route to `/webhook/simon_telegram_channel`, matching IronClaw's WASM channel route registration. It passed the local Simon IronClaw Lab fake Telegram plus Ollama comparison against the public HTTPS bundle. It is still accepted for production only after hosted Telegram pairing and identity-continuity smoke tests pass.
 
-Install through IronClaw's extension URL installer/API with explicit channel kind only when intentionally reproducing the failed slice:
+Install through IronClaw's extension URL installer/API with explicit channel kind:
 
 ```json
 {
@@ -67,3 +67,9 @@ Before sharing an install URL, verify the pushed raw GitHub URL returns `200` an
 Hosted installs must use public URLs from this repo. Do not use raw GitHub URLs from the private `simon-docs` repo.
 
 Raw URL and capabilities checks are necessary release checks, but not success criteria. A release is accepted only after the real hosted Telegram transcript shows the expected pairing handshake before approval and durable Simon identity/context after approval.
+
+## Diagnostic Context
+
+The reusable lab at `/Users/alonr/projects/simon-ironclaw-lab` compares the built-in `telegram` channel and this custom `simon_telegram_channel` under the same fake Telegram pairing scenario.
+
+That lab found the `1.6` failure: the custom channel still used the built-in `/webhook/telegram` route, while IronClaw registers custom WASM channels at `/webhook/{channel_name}`. Version `1.7` aligns source, capabilities, and bundle metadata on `/webhook/simon_telegram_channel`.

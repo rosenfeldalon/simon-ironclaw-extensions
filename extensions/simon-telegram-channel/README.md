@@ -70,6 +70,8 @@ https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironcl
 
 Do not use raw GitHub URLs from private `simon-docs` for hosted installs.
 
+The `1.7` bundle is published and locally validated through `/Users/alonr/projects/simon-ironclaw-lab` with fake Telegram plus Ollama. The remaining production gate is a hosted/live Telegram transcript proving pairing and durable identity continuity.
+
 For local CLI or self-hosted installs, if channel installation from a local file is available:
 
 ```bash
