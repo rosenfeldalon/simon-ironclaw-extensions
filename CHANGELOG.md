@@ -2,6 +2,7 @@
 
 ## 1.6
 
+- Hosted behavioral acceptance failed: the bot responded, but the expected built-in-style Telegram pairing handshake and durable Simon identity/context were still not achieved.
 - Restores built-in-style Telegram admission using owner, allow-list, and pairing signals before emitting messages to Simon.
 - Sends the official pairing-code reply for unadmitted private senders and stops before the agent sees the message.
 - Emits a plain-text verified Simon sender context for admitted Alon messages.

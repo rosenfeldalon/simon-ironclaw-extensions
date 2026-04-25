@@ -8,9 +8,9 @@ This repo intentionally contains only distributable extension source, release bu
 
 - `extensions/simon-telegram-channel/`: custom IronClaw Telegram channel package named `simon_telegram_channel`.
 
-## Current Bundle
+## Latest Bundle
 
-The current public bundle is:
+The latest public bundle is:
 
 ```text
 bundles/simon_telegram_channel/1.6.tar.gz
@@ -22,7 +22,9 @@ After pushing tag `ironclaw-simon-telegram-1.6`, the direct install URL is:
 https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.6/bundles/simon_telegram_channel/1.6.tar.gz
 ```
 
-Install through IronClaw's extension URL installer/API with explicit channel kind:
+Important: `1.6` is published for reproduction and inspection, but it did not pass hosted behavioral acceptance. The channel installed and responded, but the expected built-in-style Telegram pairing handshake and durable Simon identity/context still did not work. Do not treat this bundle as known-good.
+
+Install through IronClaw's extension URL installer/API with explicit channel kind only when intentionally reproducing the failed slice:
 
 ```json
 {
@@ -63,3 +65,5 @@ Before sharing an install URL, verify the pushed raw GitHub URL returns `200` an
 - `wit_version: "0.3.0"`
 
 Hosted installs must use public URLs from this repo. Do not use raw GitHub URLs from the private `simon-docs` repo.
+
+Raw URL and capabilities checks are necessary release checks, but not success criteria. A release is accepted only after the real hosted Telegram transcript shows the expected pairing handshake before approval and durable Simon identity/context after approval.
