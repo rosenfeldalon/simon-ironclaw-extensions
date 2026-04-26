@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist/ironclaw-upload"
-TRACKED_BUNDLE_VERSION="${IRONCLAW_SIMON_BUNDLE_VERSION:-1.9}"
+TRACKED_BUNDLE_VERSION="${IRONCLAW_SIMON_BUNDLE_VERSION:-1.10}"
 TRACKED_BUNDLE_DIR="$ROOT_DIR/bundles/simon_telegram_channel"
 WORK_DIR="$DIST_DIR/.work"
 

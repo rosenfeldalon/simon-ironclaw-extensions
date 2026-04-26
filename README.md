@@ -13,23 +13,23 @@ This repo intentionally contains only distributable extension source, release bu
 The latest public bundle is:
 
 ```text
-bundles/simon_telegram_channel/1.9.tar.gz
+bundles/simon_telegram_channel/1.10.tar.gz
 ```
 
-After pushing tag `ironclaw-simon-telegram-1.9`, the direct install URL is:
+After pushing tag `ironclaw-simon-telegram-1.10`, the direct install URL is:
 
 ```text
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.9/bundles/simon_telegram_channel/1.9.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.10/bundles/simon_telegram_channel/1.10.tar.gz
 ```
 
-Important: `1.9` keeps the `1.7` custom webhook route fix and `1.8` runtime/admission diagnostics, then hardens the safety boundary. Unapproved Telegram messages are logged with redacted admission metadata and ignored before agent emission; private unapproved senders may still receive the pairing-code onboarding reply. Outbound raw tool/runtime/schema/auth errors are sanitized before Telegram delivery. It should log `Simon Telegram channel runtime version 1.9` at startup.
+Important: `1.10` keeps the `1.9` safety boundary, stops forwarding auth-required/completed status cards into Telegram, and moves private Telegram messages onto a fresh thread namespace to avoid stale pre-1.10 engine context. It should log `Simon Telegram channel runtime version 1.10` at startup.
 
 Install through IronClaw's extension URL installer/API with explicit channel kind:
 
 ```json
 {
   "name": "simon_telegram_channel",
-  "url": "https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.9/bundles/simon_telegram_channel/1.9.tar.gz",
+  "url": "https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.10/bundles/simon_telegram_channel/1.10.tar.gz",
   "kind": "wasm_channel"
 }
 ```
@@ -41,7 +41,7 @@ Do not use the Settings import flow for this `.tar.gz`; that path is for setting
 ```bash
 rustup target add wasm32-wasip2
 cargo fmt --check && cargo test --manifest-path extensions/simon-telegram-channel/Cargo.toml
-IRONCLAW_SIMON_BUNDLE_VERSION=1.9 ./scripts/build-ironclaw-upload-bundles.sh
+IRONCLAW_SIMON_BUNDLE_VERSION=1.10 ./scripts/build-ironclaw-upload-bundles.sh
 ```
 
 The build script writes:
@@ -60,7 +60,7 @@ Use placeholders only. Do not commit real Telegram IDs, usernames, bot tokens, w
 Before sharing an install URL, verify the pushed raw GitHub URL returns `200` and inspect the packaged capabilities JSON for:
 
 - `name: "simon_telegram_channel"`
-- `version: "1.9"`
+- `version: "1.10"`
 - `type: "channel"`
 - `wit_version: "0.3.0"`
 
@@ -72,4 +72,4 @@ Raw URL and capabilities checks are necessary release checks, but not success cr
 
 The reusable lab at `/Users/alonr/projects/simon-ironclaw-lab` compares the built-in `telegram` channel and this custom `simon_telegram_channel` under the same fake Telegram pairing scenario.
 
-That lab found the `1.6` failure: the custom channel still used the built-in `/webhook/telegram` route, while IronClaw registers custom WASM channels at `/webhook/{channel_name}`. Version `1.7` aligned source, capabilities, and bundle metadata on `/webhook/simon_telegram_channel`; `1.8` added hosted diagnostics for the remaining admission/identity gap; `1.9` adds the safety behavior for ignored unapproved Telegram messages and sanitized outbound raw errors.
+That lab found the `1.6` failure: the custom channel still used the built-in `/webhook/telegram` route, while IronClaw registers custom WASM channels at `/webhook/{channel_name}`. Version `1.7` aligned source, capabilities, and bundle metadata on `/webhook/simon_telegram_channel`; `1.8` added hosted diagnostics for the remaining admission/identity gap; `1.9` added the safety behavior for ignored unapproved Telegram messages and sanitized outbound raw errors; `1.10` suppresses Telegram auth status cards and starts a fresh private thread namespace.

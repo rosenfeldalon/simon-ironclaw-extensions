@@ -276,8 +276,9 @@ const ALLOW_FROM_PATH: &str = "state/allow_from";
 
 /// Channel name for pairing store (used by pairing host APIs).
 const CHANNEL_NAME: &str = "simon_telegram_channel";
-const CHANNEL_VERSION: &str = "1.9";
+const CHANNEL_VERSION: &str = "1.10";
 const WEBHOOK_PATH: &str = "/webhook/simon_telegram_channel";
+const SIMON_THREAD_CONTEXT_VERSION: &str = "safety-1";
 
 /// Workspace path for persisting bot_username for mention detection in groups.
 const BOT_USERNAME_PATH: &str = "state/bot_username";
@@ -571,12 +572,12 @@ fn classify_status_update(update: &StatusUpdate) -> Option<TelegramStatusAction>
                 status_message_for_user(update).map(TelegramStatusAction::Notify)
             }
         }
-        StatusType::ApprovalNeeded
-        | StatusType::JobStarted
-        | StatusType::AuthRequired
-        | StatusType::AuthCompleted => {
+        StatusType::ApprovalNeeded | StatusType::JobStarted => {
             status_message_for_user(update).map(TelegramStatusAction::Notify)
         }
+        // Auth cards are GUI/admin concerns. Forwarding them to Telegram can
+        // trap the private chat in stale setup context and leak tool names.
+        StatusType::AuthRequired | StatusType::AuthCompleted => None,
     }
 }
 
@@ -2259,7 +2260,7 @@ fn simon_identity_profile(canonical_id: &str) -> Option<SimonIdentityProfile> {
 }
 
 fn simon_identity_for_admitted_sender(is_admitted: bool) -> Option<SimonIdentityProfile> {
-    // For 1.9, all approved Telegram admission resolves to Alon. Shlomit is
+    // For 1.10, all approved Telegram admission resolves to Alon. Shlomit is
     // modeled above for a future explicit onboarding path, but is not active.
     is_admitted.then_some(ALON_PROFILE)
 }
@@ -2491,7 +2492,10 @@ fn handle_message(message: TelegramMessage) {
         .unwrap_or_else(|| from.id.to_string());
     let emitted_user_name = simon_display_name(simon_identity, user_name);
     let thread_id = if is_private {
-        Some(format!("telegram-private:{}", emitted_user_id))
+        Some(format!(
+            "telegram-private:{}:{}",
+            SIMON_THREAD_CONTEXT_VERSION, emitted_user_id
+        ))
     } else {
         Some(message.chat.id.to_string())
     };
@@ -3118,12 +3122,7 @@ mod tests {
             metadata_json: "{}".to_string(),
         };
 
-        assert_eq!(
-            classify_status_update(&update),
-            Some(TelegramStatusAction::Notify(
-                "Authentication required for weather.".to_string()
-            ))
-        );
+        assert_eq!(classify_status_update(&update), None);
     }
 
     #[test]
@@ -3172,12 +3171,7 @@ mod tests {
             metadata_json: "{}".to_string(),
         };
 
-        assert_eq!(
-            classify_status_update(&update),
-            Some(TelegramStatusAction::Notify(
-                "Authentication completed for weather.".to_string()
-            ))
-        );
+        assert_eq!(classify_status_update(&update), None);
     }
 
     #[test]

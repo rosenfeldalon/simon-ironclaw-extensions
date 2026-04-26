@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.10
+
+- Stops forwarding `AuthRequired` and `AuthCompleted` status cards to Telegram; auth remains a GUI/admin surface concern.
+- Moves private Telegram messages onto a fresh `telegram-private:safety-1:<identity>` thread namespace to avoid stale pre-1.10 engine context.
+- Keeps the `1.9` ignored-message admission gate, Alon verified-sender context, Shlomit future profile, and outbound raw-error sanitization.
+
 ## 1.9
 
 - Logs unapproved Telegram messages with redacted admission metadata and ignores them before agent emission.
