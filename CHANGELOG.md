@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.9
+
+- Logs unapproved Telegram messages with redacted admission metadata and ignores them before agent emission.
+- Keeps private unapproved sender onboarding through the pairing-code reply.
+- Adds outbound sanitization for obvious raw tool/runtime/schema/auth errors before Telegram delivery.
+- Refactors Simon identity handling around explicit identity profiles, with Shlomit modeled for future onboarding but not active or auto-bound.
+- Packaged as an IronClaw channel bundle with `type: "channel"` and WIT `0.3.0`.
+
+## 1.8
+
+- Added hosted runtime and redacted admission diagnostics to identify stale runtime or admission-state behavior.
+- Kept the custom `/webhook/simon_telegram_channel` route fix from `1.7`.
+
+## 1.7
+
+- Changed the custom webhook path from `/webhook/telegram` to `/webhook/simon_telegram_channel`.
+- Passed the blocker-lab built-in-vs-custom Telegram pairing comparison with the public HTTPS bundle.
+
 ## 1.6
 
 - Hosted behavioral acceptance failed: the bot responded, but the expected built-in-style Telegram pairing handshake and durable Simon identity/context were still not achieved.

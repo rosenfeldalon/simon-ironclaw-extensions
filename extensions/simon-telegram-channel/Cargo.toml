@@ -1,6 +1,6 @@
 [package]
 name = "simon-telegram-channel"
-version = "1.8.0"
+version = "1.9.0"
 edition = "2021"
 description = "Simon Telegram channel with pairing-backed identity"
 license = "MIT OR Apache-2.0"
