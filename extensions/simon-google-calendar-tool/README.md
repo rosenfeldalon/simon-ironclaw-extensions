@@ -15,6 +15,8 @@ It is a custom WASM tool named `simon_google_calendar`. The first version is int
 - Returns shaped DTOs with opaque `eventRef` values instead of raw Google event IDs.
 - Makes no Google API call for unauthorized actors, invalid windows, unsupported aliases, unsupported actions, or missing OAuth setup.
 
+V1 maps `family` to Google Calendar's `primary` calendar so the first live smoke can use a non-sensitive test account without committing raw calendar IDs. Before using the real Family Google Calendar, add a private alias-to-calendar-ID configuration path if that calendar is not the authorized account's primary calendar.
+
 ## Setup Secrets
 
 Do not put real Google OAuth values, refresh tokens, raw calendar IDs, or raw event IDs in this repo.

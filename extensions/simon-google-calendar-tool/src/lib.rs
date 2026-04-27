@@ -98,6 +98,10 @@ impl CalendarAlias {
 
     fn calendar_id(self) -> &'static str {
         match self {
+            // V1 deliberately keeps raw calendar IDs out of source and bundle
+            // metadata. Use a non-sensitive OAuth test account whose primary
+            // calendar stands in for the Family alias until private alias
+            // configuration is added.
             CalendarAlias::Family => "primary",
         }
     }
