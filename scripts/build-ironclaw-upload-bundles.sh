@@ -34,11 +34,17 @@ package_extension() {
 }
 
 build_crate "extensions/simon-telegram-channel"
+build_crate "extensions/simon-google-calendar-tool"
 
 package_extension \
   "$ROOT_DIR/extensions/simon-telegram-channel/target/wasm32-wasip2/release/simon_telegram_channel.wasm" \
   "$ROOT_DIR/extensions/simon-telegram-channel/simon-telegram.capabilities.json" \
   "simon_telegram_channel"
+
+package_extension \
+  "$ROOT_DIR/extensions/simon-google-calendar-tool/target/wasm32-wasip2/release/simon_google_calendar_tool.wasm" \
+  "$ROOT_DIR/extensions/simon-google-calendar-tool/simon-google-calendar.capabilities.json" \
+  "simon_google_calendar"
 
 rm -rf "$WORK_DIR"
 

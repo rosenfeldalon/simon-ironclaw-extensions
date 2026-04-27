@@ -7,6 +7,7 @@ This repo intentionally contains only distributable extension source, release bu
 ## Extensions
 
 - `extensions/simon-telegram-channel/`: custom IronClaw Telegram channel package named `simon_telegram_channel`.
+- `extensions/simon-google-calendar-tool/`: Simon-specific read-only Google Calendar tool package named `simon_google_calendar`.
 
 ## Latest Bundle
 
@@ -48,12 +49,15 @@ The build script writes:
 
 ```text
 dist/ironclaw-upload/simon_telegram_channel.tar.gz
+dist/ironclaw-upload/simon_google_calendar.tar.gz
 bundles/simon_telegram_channel/<version>.tar.gz
 ```
 
 ## Public Safety Rule
 
 Use placeholders only. Do not commit real Telegram IDs, usernames, bot tokens, webhook secrets, calendar IDs, OAuth details, or private Simon family context.
+
+For `simon_google_calendar`, keep live Google OAuth Client IDs, Client Secrets, refresh tokens, raw calendar IDs, and raw Google event IDs out of fixtures, docs, logs, bundle metadata, and reports.
 
 ## Release Verification
 
@@ -67,6 +71,14 @@ Before sharing an install URL, verify the pushed raw GitHub URL returns `200` an
 Hosted installs must use public URLs from this repo. Do not use raw GitHub URLs from the private `simon-docs` repo.
 
 Raw URL and capabilities checks are necessary release checks, but not success criteria. A release is accepted only after the real hosted Telegram transcript shows the expected pairing handshake before approval and durable Simon identity/context after approval.
+
+`simon_google_calendar` is not yet accepted for hosted install. Its first gate is the local lab report from `/Users/alonr/projects/simon-ironclaw-lab`:
+
+```bash
+iclab calendar contract
+```
+
+Only publish the calendar tool after local fake-contract tests, capabilities inspection, and an explicit non-sensitive OAuth smoke pass.
 
 ## Diagnostic Context
 

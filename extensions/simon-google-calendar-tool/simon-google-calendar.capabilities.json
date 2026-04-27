@@ -1,0 +1,69 @@
+{
+  "version": "0.1.0",
+  "wit_version": "0.3.0",
+  "type": "tool",
+  "name": "simon_google_calendar",
+  "description": "Simon-specific read-only Google Calendar lookup tool with actor gating, calendar aliases, and shaped calendar DTOs.",
+  "http": {
+    "allowlist": [
+      {
+        "host": "www.googleapis.com",
+        "path_prefix": "/calendar/v3/",
+        "methods": ["GET"]
+      }
+    ],
+    "credentials": {
+      "simon_google_calendar_oauth_token": {
+        "secret_name": "simon_google_calendar_oauth_token",
+        "location": { "type": "bearer" },
+        "host_patterns": ["www.googleapis.com"]
+      }
+    },
+    "rate_limit": {
+      "requests_per_minute": 30,
+      "requests_per_hour": 500
+    },
+    "timeout_secs": 30
+  },
+  "secrets": {
+    "allowed_names": [
+      "simon_google_calendar_oauth_token",
+      "simon_google_calendar_oauth_client_id",
+      "simon_google_calendar_oauth_client_secret"
+    ]
+  },
+  "auth": {
+    "secret_name": "simon_google_calendar_oauth_token",
+    "display_name": "Simon Google Calendar",
+    "oauth": {
+      "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth",
+      "token_url": "https://oauth2.googleapis.com/token",
+      "client_id_env": "SIMON_GOOGLE_CALENDAR_OAUTH_CLIENT_ID",
+      "client_secret_env": "SIMON_GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET",
+      "scopes": [
+        "https://www.googleapis.com/auth/calendar.events.readonly"
+      ],
+      "use_pkce": false,
+      "extra_params": {
+        "access_type": "offline",
+        "prompt": "consent"
+      },
+      "pending_instructions": "Use a Simon-owned Google OAuth Web application client. Copy the redirect URI from IronClaw's auth flow into Google Cloud Console exactly; do not guess it."
+    },
+    "env_var": "SIMON_GOOGLE_CALENDAR_OAUTH_TOKEN"
+  },
+  "setup": {
+    "required_secrets": [
+      {
+        "name": "simon_google_calendar_oauth_client_id",
+        "prompt": "Google OAuth Client ID for Simon Calendar (from console.cloud.google.com/apis/credentials)",
+        "optional": false
+      },
+      {
+        "name": "simon_google_calendar_oauth_client_secret",
+        "prompt": "Google OAuth Client Secret for Simon Calendar",
+        "optional": false
+      }
+    ]
+  }
+}
