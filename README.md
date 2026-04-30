@@ -43,7 +43,7 @@ Do not use the Settings import flow for this `.tar.gz`; that path is for setting
 rustup target add wasm32-wasip2
 cargo fmt --check && cargo test --manifest-path extensions/simon-telegram-channel/Cargo.toml
 IRONCLAW_SIMON_TELEGRAM_BUNDLE_VERSION=1.10 \
-IRONCLAW_SIMON_CALENDAR_BUNDLE_VERSION=0.2.2 \
+IRONCLAW_SIMON_CALENDAR_BUNDLE_VERSION=0.2.3 \
   ./scripts/build-ironclaw-upload-bundles.sh
 ```
 
@@ -75,7 +75,7 @@ Hosted installs must use public URLs from this repo. Do not use raw GitHub URLs 
 
 Raw URL and capabilities checks are necessary release checks, but not success criteria. A release is accepted only after the real hosted Telegram transcript shows the expected pairing handshake before approval and durable Simon identity/context after approval.
 
-`simon_google_calendar` `0.2.2` is the current read/write hosted-install candidate. Its local lab gate is the report from `/Users/alonr/projects/simon-ironclaw-lab`:
+`simon_google_calendar` `0.2.3` is the current read/write hosted-install candidate. Its local lab gate is the report from `/Users/alonr/projects/simon-ironclaw-lab`:
 
 ```bash
 iclab calendar contract

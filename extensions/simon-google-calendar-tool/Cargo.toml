@@ -1,6 +1,6 @@
 [package]
 name = "simon-google-calendar-tool"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 description = "Simon-specific Google Calendar read/write tool for IronClaw"
 license = "MIT OR Apache-2.0"

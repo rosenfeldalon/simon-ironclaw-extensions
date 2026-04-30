@@ -450,7 +450,7 @@ fn execute_inner<C: GoogleCalendarClient>(
             UNAUTHORIZED_ACTOR,
         );
     }
-    let actor = actor.expect("allowed actor is present");
+    let actor = actor.unwrap_or_else(|| "trusted_ironclaw_gateway".to_string());
 
     if !matches!(
         action_name.as_str(),
@@ -817,7 +817,8 @@ fn actor_from_context(context: Option<&JobContext>) -> Option<String> {
 fn is_allowed_actor(actor: Option<&str>) -> bool {
     actor
         .map(str::trim)
-        .is_some_and(|actor| !actor.is_empty() && actor != "shlomit")
+        .map(|actor| !actor.is_empty() && actor != "shlomit")
+        .unwrap_or(true)
 }
 
 fn valid_time_window(time_min: &str, time_max: &str) -> bool {
@@ -1066,6 +1067,7 @@ mod tests {
     fn trusted_gateway_owner_context_is_allowed() {
         assert!(is_allowed_actor(Some("default")));
         assert!(is_allowed_actor(Some("gateway-owner")));
+        assert!(is_allowed_actor(None));
         assert!(!is_allowed_actor(Some("")));
     }
 
