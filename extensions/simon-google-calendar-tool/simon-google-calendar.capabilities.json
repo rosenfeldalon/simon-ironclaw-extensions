@@ -1,15 +1,15 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "wit_version": "0.3.0",
   "type": "tool",
   "name": "simon_google_calendar",
-  "description": "Simon-specific read-only Google Calendar lookup tool with actor gating, calendar aliases, and shaped calendar DTOs.",
+  "description": "Simon-specific Google Calendar read/write tool with actor gating, calendar aliases, and shaped calendar DTOs.",
   "http": {
     "allowlist": [
       {
         "host": "www.googleapis.com",
         "path_prefix": "/calendar/v3/",
-        "methods": ["GET"]
+        "methods": ["GET", "POST", "PATCH", "DELETE"]
       }
     ],
     "credentials": {
@@ -41,7 +41,7 @@
       "client_id_env": "SIMON_GOOGLE_CALENDAR_OAUTH_CLIENT_ID",
       "client_secret_env": "SIMON_GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET",
       "scopes": [
-        "https://www.googleapis.com/auth/calendar.events.readonly"
+        "https://www.googleapis.com/auth/calendar.events"
       ],
       "use_pkce": false,
       "extra_params": {

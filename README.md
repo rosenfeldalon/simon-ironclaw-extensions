@@ -7,7 +7,7 @@ This repo intentionally contains only distributable extension source, release bu
 ## Extensions
 
 - `extensions/simon-telegram-channel/`: custom IronClaw Telegram channel package named `simon_telegram_channel`.
-- `extensions/simon-google-calendar-tool/`: Simon-specific read-only Google Calendar tool package named `simon_google_calendar`.
+- `extensions/simon-google-calendar-tool/`: Simon-specific Google Calendar read/write tool package named `simon_google_calendar`.
 
 ## Latest Bundle
 
@@ -42,7 +42,9 @@ Do not use the Settings import flow for this `.tar.gz`; that path is for setting
 ```bash
 rustup target add wasm32-wasip2
 cargo fmt --check && cargo test --manifest-path extensions/simon-telegram-channel/Cargo.toml
-IRONCLAW_SIMON_BUNDLE_VERSION=1.10 ./scripts/build-ironclaw-upload-bundles.sh
+IRONCLAW_SIMON_TELEGRAM_BUNDLE_VERSION=1.10 \
+IRONCLAW_SIMON_CALENDAR_BUNDLE_VERSION=0.2.0 \
+  ./scripts/build-ironclaw-upload-bundles.sh
 ```
 
 The build script writes:
@@ -51,6 +53,7 @@ The build script writes:
 dist/ironclaw-upload/simon_telegram_channel.tar.gz
 dist/ironclaw-upload/simon_google_calendar.tar.gz
 bundles/simon_telegram_channel/<version>.tar.gz
+bundles/simon_google_calendar/<version>.tar.gz
 ```
 
 ## Public Safety Rule
@@ -72,7 +75,7 @@ Hosted installs must use public URLs from this repo. Do not use raw GitHub URLs 
 
 Raw URL and capabilities checks are necessary release checks, but not success criteria. A release is accepted only after the real hosted Telegram transcript shows the expected pairing handshake before approval and durable Simon identity/context after approval.
 
-`simon_google_calendar` is not yet accepted for hosted install. Its first gate is the local lab report from `/Users/alonr/projects/simon-ironclaw-lab`:
+`simon_google_calendar` `0.2.0` is the first read/write hosted-install candidate. Its local lab gate is the report from `/Users/alonr/projects/simon-ironclaw-lab`:
 
 ```bash
 iclab calendar contract

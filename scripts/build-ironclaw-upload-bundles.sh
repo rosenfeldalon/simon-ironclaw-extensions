@@ -3,8 +3,10 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist/ironclaw-upload"
-TRACKED_BUNDLE_VERSION="${IRONCLAW_SIMON_BUNDLE_VERSION:-1.10}"
-TRACKED_BUNDLE_DIR="$ROOT_DIR/bundles/simon_telegram_channel"
+TELEGRAM_BUNDLE_VERSION="${IRONCLAW_SIMON_TELEGRAM_BUNDLE_VERSION:-1.10}"
+CALENDAR_BUNDLE_VERSION="${IRONCLAW_SIMON_CALENDAR_BUNDLE_VERSION:-0.2.0}"
+TELEGRAM_BUNDLE_DIR="$ROOT_DIR/bundles/simon_telegram_channel"
+CALENDAR_BUNDLE_DIR="$ROOT_DIR/bundles/simon_google_calendar"
 WORK_DIR="$DIST_DIR/.work"
 
 mkdir -p "$WORK_DIR"
@@ -48,10 +50,13 @@ package_extension \
 
 rm -rf "$WORK_DIR"
 
-mkdir -p "$TRACKED_BUNDLE_DIR"
-cp "$DIST_DIR/simon_telegram_channel.tar.gz" "$TRACKED_BUNDLE_DIR/$TRACKED_BUNDLE_VERSION.tar.gz"
+mkdir -p "$TELEGRAM_BUNDLE_DIR" "$CALENDAR_BUNDLE_DIR"
+cp "$DIST_DIR/simon_telegram_channel.tar.gz" "$TELEGRAM_BUNDLE_DIR/$TELEGRAM_BUNDLE_VERSION.tar.gz"
+cp "$DIST_DIR/simon_google_calendar.tar.gz" "$CALENDAR_BUNDLE_DIR/$CALENDAR_BUNDLE_VERSION.tar.gz"
 
 echo "Created upload bundles:"
 ls -lh "$DIST_DIR"/*.tar.gz
 echo "Tracked bundle copies:"
-ls -lh "$TRACKED_BUNDLE_DIR/$TRACKED_BUNDLE_VERSION.tar.gz"
+ls -lh \
+  "$TELEGRAM_BUNDLE_DIR/$TELEGRAM_BUNDLE_VERSION.tar.gz" \
+  "$CALENDAR_BUNDLE_DIR/$CALENDAR_BUNDLE_VERSION.tar.gz"
