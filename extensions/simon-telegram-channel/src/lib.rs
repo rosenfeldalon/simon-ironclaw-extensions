@@ -276,9 +276,9 @@ const ALLOW_FROM_PATH: &str = "state/allow_from";
 
 /// Channel name for pairing store (used by pairing host APIs).
 const CHANNEL_NAME: &str = "simon_telegram_channel";
-const CHANNEL_VERSION: &str = "1.10";
+const CHANNEL_VERSION: &str = "1.11";
 const WEBHOOK_PATH: &str = "/webhook/simon_telegram_channel";
-const SIMON_THREAD_CONTEXT_VERSION: &str = "safety-1";
+const SIMON_THREAD_CONTEXT_VERSION: &str = "safety-2";
 
 /// Workspace path for persisting bot_username for mention detection in groups.
 const BOT_USERNAME_PATH: &str = "state/bot_username";
@@ -2282,7 +2282,7 @@ fn simon_role_display(role: &str) -> &str {
 fn content_with_simon_handoff(content: &str, identity: Option<SimonIdentityProfile>) -> String {
     match identity {
         Some(profile) => format!(
-            "Simon Telegram verified sender context:\n- canonical_id: {}\n- display_name: {}\n- role: {}\n- identity_verified: true\n\nUser message:\n{}",
+            "Simon Telegram verified sender context:\n- canonical_id: {}\n- display_name: {}\n- role: {}\n- identity_verified: true\n\nSimon runtime instructions:\n- Your user-facing assistant name in this Telegram chat is Simon.\n- IronClaw is the runtime/platform, not the assistant identity to introduce to Telegram users.\n- If asked who you are or your name, answer as Simon and keep the IronClaw platform boundary secondary only if needed.\n- Do not expose Telegram IDs, usernames, chat IDs, tokens, raw Google calendar IDs, OAuth data, or other provider metadata.\n- For calendar or schedule questions, use the `simon_google_calendar` tool when available instead of claiming credentials are missing.\n- Calendar tool calls must be JSON with an `action` such as `calendar.events.list` or `calendar.events.find`; use `calendarAlias`: `family` for the family calendar.\n- Interpret dates and times in Asia/Jerusalem unless the user says otherwise, and send RFC3339 date-time bounds for list/find requests.\n- If the calendar tool itself fails, say the calendar is temporarily unavailable and do not send raw tool errors through Telegram.\n\nUser message:\n{}",
             profile.canonical_id,
             profile.display_name,
             profile.role_display,
@@ -2987,8 +2987,19 @@ mod tests {
         assert!(content.contains("- display_name: Alon"));
         assert!(content.contains("- role: primary parent admin"));
         assert!(content.contains("- identity_verified: true"));
+        assert!(content.contains("Your user-facing assistant name in this Telegram chat is Simon."));
+        assert!(content.contains("IronClaw is the runtime/platform"));
+        assert!(content.contains("use the `simon_google_calendar` tool when available"));
+        assert!(content.contains("`action` such as `calendar.events.list`"));
+        assert!(content.contains("`calendarAlias`: `family`"));
+        assert!(content.contains("Asia/Jerusalem"));
         assert!(content.contains("User message:\nwho am i?"));
         assert!(!content.contains("123"));
+    }
+
+    #[test]
+    fn test_simon_thread_context_version_forces_fresh_private_thread() {
+        assert_eq!(SIMON_THREAD_CONTEXT_VERSION, "safety-2");
     }
 
     #[test]

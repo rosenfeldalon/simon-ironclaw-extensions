@@ -2,7 +2,7 @@
 
 This is the intended IronClaw-native wrapper for Simon's Telegram path.
 
-It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1` clone proved that the package installs and activates as `CHANNEL` when installed with explicit `kind: "wasm_channel"`. The current `1.10` layer restores built-in-style owner/pairing admission, adds Simon identity context for admitted Telegram senders, uses the custom channel webhook route, logs hosted admission decisions, ignores unapproved messages before agent emission, sanitizes outbound raw internal errors, suppresses Telegram auth status cards, and starts a fresh private thread namespace.
+It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1` clone proved that the package installs and activates as `CHANNEL` when installed with explicit `kind: "wasm_channel"`. The current `1.11` layer restores built-in-style owner/pairing admission, adds Simon identity and calendar-tool context for admitted Telegram senders, uses the custom channel webhook route, logs hosted admission decisions, ignores unapproved messages before agent emission, sanitizes outbound raw internal errors, suppresses Telegram auth status cards, and starts a fresh private thread namespace.
 
 ## Current Scope
 
@@ -15,11 +15,11 @@ It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1`
 - Logs ignored unapproved private/group messages with redacted admission metadata and without raw Telegram IDs, usernames, tokens, or message content.
 - Admits senders through built-in-style `owner_id`, `pairing_read_allow_from`, and `pairing_resolve_identity` checks.
 - Treats an admitted sender as canonical `alon` with role `primary_parent_admin` for this slice.
-- Prepends a plain-text Simon Telegram verified-sender context to admitted messages so the agent sees the canonical sender identity.
+- Prepends a plain-text Simon Telegram verified-sender context to admitted messages so the agent sees the canonical sender identity, Simon-vs-IronClaw assistant boundary, and the expected `simon_google_calendar` JSON action shape.
 - Keeps Shlomit modeled for a future explicit onboarding path, but unpaired/TBD until Alon explicitly approves her.
 - Sanitizes obvious raw tool/runtime/schema/auth errors before sending Telegram replies.
 - Suppresses auth-required/completed status cards in Telegram so Google Calendar setup stays in the GUI/admin surface.
-- Uses `telegram-private:safety-1:<identity>` for private threads to avoid stale pre-1.10 Telegram engine context.
+- Uses `telegram-private:safety-2:<identity>` for private threads to avoid stale Telegram engine context from earlier channel versions.
 - Produces an upload bundle with canonical filenames:
   - `simon_telegram_channel.wasm`
   - `simon_telegram_channel.capabilities.json`
@@ -66,15 +66,15 @@ URL: <direct HTTPS URL ending in simon_telegram_channel.tar.gz>
 
 Do not use the Settings import flow for this bundle; that endpoint expects a settings JSON export.
 
-For the current `1.10` rebuild, use the public distribution bundle:
+For the current `1.11` rebuild, use the public distribution bundle:
 
 ```text
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.10/bundles/simon_telegram_channel/1.10.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.11/bundles/simon_telegram_channel/1.11.tar.gz
 ```
 
 Do not use raw GitHub URLs from private `simon-docs` for hosted installs.
 
-The `1.10` bundle includes the `1.7` route fix, `1.8` redacted hosted diagnostics, `1.9` unapproved-message ignore logging and outbound raw-error sanitization, plus auth-status suppression and a fresh private thread namespace. If hosted logs do not show `Simon Telegram channel runtime version 1.10`, IronClaw is still running an older channel artifact or active runtime.
+The `1.11` bundle includes the `1.7` route fix, `1.8` redacted hosted diagnostics, `1.9` unapproved-message ignore logging and outbound raw-error sanitization, `1.10` auth-status suppression, and a fresh private thread namespace with stronger Simon/calendar handoff context. If hosted logs do not show `Simon Telegram channel runtime version 1.11`, IronClaw is still running an older channel artifact or active runtime.
 
 For local CLI or self-hosted installs, if channel installation from a local file is available:
 
@@ -88,4 +88,4 @@ If the hosted UI path is used, use the extension URL installer/API with `kind: w
 
 ## Calendar Boundary
 
-The identity layer now sanitizes obvious outbound raw tool/runtime/schema/auth errors, but Telegram calendar write testing remains stopped until identity/context behavior is validated in a real hosted transcript.
+The identity layer now sanitizes obvious outbound raw tool/runtime/schema/auth errors and gives admitted Telegram turns enough context to call `simon_google_calendar` with the `family` alias. Calendar write testing remains approval-gated by the active slice.
