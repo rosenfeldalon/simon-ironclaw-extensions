@@ -815,7 +815,7 @@ fn actor_from_context(context: Option<&JobContext>) -> Option<String> {
 }
 
 fn is_allowed_actor(actor: Option<&str>) -> bool {
-    matches!(actor, Some("alon" | "local_ironclaw_bot"))
+    matches!(actor, Some("alon" | "default" | "local_ironclaw_bot"))
 }
 
 fn valid_time_window(time_min: &str, time_max: &str) -> bool {
@@ -1058,6 +1058,11 @@ mod tests {
     #[test]
     fn shlomit_is_not_allowed_in_v1() {
         assert!(!is_allowed_actor(Some("shlomit")));
+    }
+
+    #[test]
+    fn hosted_gateway_owner_is_allowed() {
+        assert!(is_allowed_actor(Some("default")));
     }
 
     #[test]
