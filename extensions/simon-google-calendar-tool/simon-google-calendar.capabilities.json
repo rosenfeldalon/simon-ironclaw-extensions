@@ -1,5 +1,5 @@
 {
-  "version": "0.2.6",
+  "version": "0.2.7",
   "wit_version": "0.3.0",
   "type": "tool",
   "name": "simon_google_calendar",
@@ -44,8 +44,7 @@
       "client_id_env": "SIMON_GOOGLE_CALENDAR_OAUTH_CLIENT_ID",
       "client_secret_env": "SIMON_GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET",
       "scopes": [
-        "https://www.googleapis.com/auth/calendar.events",
-        "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
+        "https://www.googleapis.com/auth/calendar"
       ],
       "use_pkce": false,
       "extra_params": {
