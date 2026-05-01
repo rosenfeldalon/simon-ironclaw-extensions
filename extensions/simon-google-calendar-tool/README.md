@@ -2,12 +2,12 @@
 
 This is Simon's project-specific IronClaw Google Calendar tool.
 
-It is a custom WASM tool named `simon_google_calendar`. Version `0.2.3` supports the read/write Family calendar slice while keeping raw Google calendar IDs and event IDs out of model-facing output.
+It is a custom WASM tool named `simon_google_calendar`. Version `0.2.4` supports the read/write Family calendar slice while keeping raw Google calendar IDs and event IDs out of model-facing output.
 
 ## Current Scope
 
 - Accepts `calendar.events.list`, `calendar.events.find`, `calendar.events.create`, `calendar.events.update`, and `calendar.events.delete`.
-- Accepts only configured calendar aliases; `0.2.3` supports `family`.
+- Accepts only configured calendar aliases; `0.2.4` supports `family`.
 - Requires explicit RFC3339 `timeMin` and `timeMax` bounds.
 - Requires explicit RFC3339 `start` and `end` bounds for creates; updates may patch title, start/end, location, or notes.
 - Derives actor identity from trusted IronClaw job context, not model parameters.
@@ -17,7 +17,9 @@ It is a custom WASM tool named `simon_google_calendar`. Version `0.2.3` supports
 - Uses prior opaque `eventRef` values for update/delete.
 - Makes no Google API call for unauthorized actors, invalid windows, unsupported aliases, unsupported actions, invalid event refs, or missing OAuth setup.
 
-The `family` alias reads a private calendar ID from IronClaw workspace path `.system/simon_google_calendar/family_calendar_id`. If that file is absent or empty, it falls back to Google Calendar's `primary` calendar. Do not commit the real Family calendar ID.
+The `family` alias reads a private calendar ID from IronClaw workspace path `.system/simon_google_calendar/family_calendar_id`. If that file is absent, empty, or unreadable, the tool returns `CALENDAR_ALIAS_NOT_CONFIGURED` before any Google API call. Do not commit the real Family calendar ID.
+
+GUI setup for the Family calendar ID is a follow-up. IronClaw setup fields are currently persisted as settings, while WASM tools read extension-owned workspace paths; adding a setup field without an IronClaw bridge would make the GUI look configured while the tool still could not read the value.
 
 ## Setup Secrets
 

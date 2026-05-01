@@ -1,5 +1,11 @@
 # Changelog
 
+## simon_google_calendar 0.2.4
+
+- Grants workspace read access for `.system/simon_google_calendar/` so the Family calendar alias can be resolved from IronClaw workspace state.
+- Fails closed with `CALENDAR_ALIAS_NOT_CONFIGURED` when the Family calendar alias is absent, empty, or unreadable, instead of falling back to Google Calendar `primary`.
+- Keeps GUI Family calendar ID setup as a follow-up until IronClaw can bridge setup fields into a tool-readable path.
+
 ## 1.10
 
 - Stops forwarding `AuthRequired` and `AuthCompleted` status cards to Telegram; auth remains a GUI/admin surface concern.

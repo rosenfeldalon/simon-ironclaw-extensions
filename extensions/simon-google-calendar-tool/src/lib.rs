@@ -138,12 +138,11 @@ impl CalendarAlias {
         }
     }
 
-    fn calendar_id(self) -> String {
+    fn calendar_id(self) -> Option<String> {
         match self {
-            CalendarAlias::Family => near::agent::host::workspace_read(FAMILY_CALENDAR_ID_PATH)
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
-                .unwrap_or_else(|| "primary".to_string()),
+            CalendarAlias::Family => calendar_id_from_workspace_value(
+                near::agent::host::workspace_read(FAMILY_CALENDAR_ID_PATH),
+            ),
         }
     }
 }
@@ -504,8 +503,16 @@ fn execute_inner<C: GoogleCalendarClient>(
                     INVALID_MAX_RESULTS,
                 );
             };
+            let Some(calendar_id) = read.calendar_alias.calendar_id() else {
+                return serialize_error(
+                    read.request_id,
+                    read.action.to_string(),
+                    "CALENDAR_ALIAS_NOT_CONFIGURED",
+                    CALENDAR_ALIAS_NOT_CONFIGURED,
+                );
+            };
             let google_events = client.list_events(
-                &read.calendar_alias.calendar_id(),
+                &calendar_id,
                 &read.time_min,
                 &read.time_max,
                 max_results,
@@ -544,7 +551,15 @@ fn execute_inner<C: GoogleCalendarClient>(
                 location: clean_optional(write.location),
                 description: clean_optional(write.notes),
             };
-            let google_event = client.create_event(&write.calendar_alias.calendar_id(), &event)?;
+            let Some(calendar_id) = write.calendar_alias.calendar_id() else {
+                return serialize_error(
+                    write.request_id,
+                    write.action.to_string(),
+                    "CALENDAR_ALIAS_NOT_CONFIGURED",
+                    CALENDAR_ALIAS_NOT_CONFIGURED,
+                );
+            };
+            let google_event = client.create_event(&calendar_id, &event)?;
             serialize_mutation_success(
                 write.request_id,
                 write.action,
@@ -590,8 +605,15 @@ fn execute_inner<C: GoogleCalendarClient>(
                 location: clean_optional(write.location),
                 description: clean_optional(write.notes),
             };
-            let google_event =
-                client.update_event(&write.calendar_alias.calendar_id(), &event_id, &event)?;
+            let Some(calendar_id) = write.calendar_alias.calendar_id() else {
+                return serialize_error(
+                    write.request_id,
+                    write.action.to_string(),
+                    "CALENDAR_ALIAS_NOT_CONFIGURED",
+                    CALENDAR_ALIAS_NOT_CONFIGURED,
+                );
+            };
+            let google_event = client.update_event(&calendar_id, &event_id, &event)?;
             serialize_mutation_success(
                 write.request_id,
                 write.action,
@@ -609,7 +631,15 @@ fn execute_inner<C: GoogleCalendarClient>(
                     INVALID_EVENT_REF,
                 );
             };
-            client.delete_event(&write.calendar_alias.calendar_id(), &event_id)?;
+            let Some(calendar_id) = write.calendar_alias.calendar_id() else {
+                return serialize_error(
+                    write.request_id,
+                    write.action.to_string(),
+                    "CALENDAR_ALIAS_NOT_CONFIGURED",
+                    CALENDAR_ALIAS_NOT_CONFIGURED,
+                );
+            };
+            client.delete_event(&calendar_id, &event_id)?;
             let success = CalendarDeleteSuccess {
                 ok: true,
                 request_id: write.request_id,
@@ -786,6 +816,8 @@ const INVALID_EVENT_INPUT: &str =
     "Event writes require a title and valid RFC3339 start/end timestamps, or at least one valid update field.";
 const INVALID_EVENT_REF: &str = "eventRef is not a valid Simon calendar event reference.";
 const AUTH_REQUIRED: &str = "Simon Google Calendar OAuth is not configured.";
+const CALENDAR_ALIAS_NOT_CONFIGURED: &str =
+    "The Family calendar alias is not configured for Simon Google Calendar.";
 
 fn parse_context(context: Option<&str>) -> Option<JobContext> {
     context.and_then(|value| serde_json::from_str(value).ok())
@@ -846,6 +878,12 @@ fn normalized_max_results(value: Option<u32>) -> Option<u32> {
     } else {
         None
     }
+}
+
+fn calendar_id_from_workspace_value(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 fn write_time(date_time: String) -> GoogleEventWriteTime {
@@ -1069,6 +1107,24 @@ mod tests {
         assert!(is_allowed_actor(Some("gateway-owner")));
         assert!(is_allowed_actor(None));
         assert!(!is_allowed_actor(Some("")));
+    }
+
+    #[test]
+    fn family_calendar_id_requires_configured_workspace_value() {
+        assert_eq!(calendar_id_from_workspace_value(None), None);
+        assert_eq!(
+            calendar_id_from_workspace_value(Some("   ".to_string())),
+            None
+        );
+        assert_eq!(
+            calendar_id_from_workspace_value(Some(" family-calendar-placeholder \n".to_string()))
+                .as_deref(),
+            Some("family-calendar-placeholder")
+        );
+        assert_eq!(
+            calendar_id_from_workspace_value(Some("primary".to_string())).as_deref(),
+            Some("primary")
+        );
     }
 
     #[test]
