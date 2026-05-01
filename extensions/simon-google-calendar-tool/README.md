@@ -2,12 +2,12 @@
 
 This is Simon's project-specific IronClaw Google Calendar tool.
 
-It is a custom WASM tool named `simon_google_calendar`. Version `0.2.5` supports the read/write Family calendar slice plus a redacted calendar-list diagnostic while keeping raw Google calendar IDs and event IDs out of model-facing output.
+It is a custom WASM tool named `simon_google_calendar`. Version `0.2.6` supports the read/write Family calendar slice plus a redacted calendar-list diagnostic while keeping raw Google calendar IDs and event IDs out of model-facing output.
 
 ## Current Scope
 
 - Accepts `calendar.events.list`, `calendar.events.find`, `calendar.events.create`, `calendar.events.update`, `calendar.events.delete`, and `calendar.calendars.list`.
-- Accepts only configured calendar aliases; `0.2.5` supports `family`.
+- Accepts only configured calendar aliases; `0.2.6` supports `family`.
 - Requires explicit RFC3339 `timeMin` and `timeMax` bounds.
 - Requires explicit RFC3339 `start` and `end` bounds for creates; updates may patch title, start/end, location, or notes.
 - Derives actor identity from trusted IronClaw job context, not model parameters.
@@ -32,7 +32,7 @@ The tool uses dedicated Simon credential names:
 - `simon_google_calendar_oauth_client_id`: Google OAuth Web application Client ID.
 - `simon_google_calendar_oauth_client_secret`: Google OAuth Web application Client Secret.
 
-Google Cloud Console provides the Client ID and Client Secret for an OAuth Web application. IronClaw uses those during `tool auth`; the OAuth token is created later by Google after the account authorizes Calendar access with `https://www.googleapis.com/auth/calendar.events`.
+Google Cloud Console provides the Client ID and Client Secret for an OAuth Web application. IronClaw uses those during `tool auth`; the OAuth token is created later by Google after the account authorizes Calendar access with `https://www.googleapis.com/auth/calendar.events` and `https://www.googleapis.com/auth/calendar.calendarlist.readonly`.
 
 ## Build
 
