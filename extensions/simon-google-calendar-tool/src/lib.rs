@@ -44,9 +44,9 @@ impl exports::near::agent::tool::Guest for SimonGoogleCalendarTool {
 
     fn description() -> String {
         "Simon-specific Google Calendar access for the Family calendar. Use after trusted \
-         actor identity is available from IronClaw context. Supports bounded event list/search \
-         plus create, update, and delete. The tool accepts calendar aliases, never raw calendar \
-         IDs, and returns shaped DTOs with opaque event references."
+         actor identity is available from IronClaw context. Supports bounded event list/search, \
+         create, update, delete, and a redacted calendar-list diagnostic. The tool accepts calendar \
+         aliases, never raw calendar IDs, and returns shaped DTOs with opaque event references."
             .to_string()
     }
 }
@@ -54,6 +54,11 @@ impl exports::near::agent::tool::Guest for SimonGoogleCalendarTool {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(tag = "action")]
 enum CalendarAction {
+    #[serde(rename = "calendar.calendars.list")]
+    ListCalendars {
+        #[serde(default, rename = "requestId")]
+        request_id: Option<String>,
+    },
     #[serde(rename = "calendar.events.list")]
     ListEvents {
         #[serde(default, rename = "requestId")]
@@ -193,6 +198,31 @@ struct CalendarDeleteSuccess {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct CalendarListSuccess {
+    ok: bool,
+    request_id: Option<String>,
+    action: &'static str,
+    actor: String,
+    calendars: Vec<CalendarListEntryDto>,
+    configured_family_matches: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CalendarListEntryDto {
+    index: usize,
+    summary: String,
+    primary: bool,
+    selected: Option<bool>,
+    hidden: Option<bool>,
+    access_role: Option<String>,
+    time_zone: Option<String>,
+    id_kind: &'static str,
+    configured_as_family: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct CalendarEventDto {
     event_ref: String,
     title: String,
@@ -223,6 +253,31 @@ struct ErrorBody {
 struct GoogleEventsResponse {
     #[serde(default)]
     items: Vec<GoogleEvent>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoogleCalendarListResponse {
+    #[serde(default)]
+    items: Vec<GoogleCalendarListEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleCalendarListEntry {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    summary: Option<String>,
+    #[serde(default)]
+    primary: Option<bool>,
+    #[serde(default)]
+    selected: Option<bool>,
+    #[serde(default)]
+    hidden: Option<bool>,
+    #[serde(default)]
+    access_role: Option<String>,
+    #[serde(default)]
+    time_zone: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -271,6 +326,8 @@ struct GoogleEventWriteTime {
 }
 
 trait GoogleCalendarClient {
+    fn list_calendars(&self) -> Result<Vec<GoogleCalendarListEntry>, String>;
+
     fn list_events(
         &self,
         calendar_id: &str,
@@ -299,6 +356,30 @@ trait GoogleCalendarClient {
 struct HostGoogleCalendarClient;
 
 impl GoogleCalendarClient for HostGoogleCalendarClient {
+    fn list_calendars(&self) -> Result<Vec<GoogleCalendarListEntry>, String> {
+        let url = format!(
+            "{}/users/me/calendarList?minAccessRole=reader&showHidden=true",
+            CALENDAR_API_BASE
+        );
+
+        near::agent::host::log(
+            near::agent::host::LogLevel::Info,
+            &format!("{} GET /calendar/v3/users/me/calendarList", TOOL_NAME),
+        );
+        let response = near::agent::host::http_request("GET", &url, "{}", None, Some(30_000))?;
+        if response.status < 200 || response.status >= 300 {
+            return Err(format!(
+                "Google Calendar API returned HTTP {}",
+                response.status
+            ));
+        }
+        let body = String::from_utf8(response.body)
+            .map_err(|err| format!("Google Calendar API returned non-UTF8 response: {}", err))?;
+        let parsed: GoogleCalendarListResponse = serde_json::from_str(&body)
+            .map_err(|err| format!("Google Calendar API response was not valid JSON: {}", err))?;
+        Ok(parsed.items)
+    }
+
     fn list_events(
         &self,
         calendar_id: &str,
@@ -453,7 +534,8 @@ fn execute_inner<C: GoogleCalendarClient>(
 
     if !matches!(
         action_name.as_str(),
-        "calendar.events.list"
+        "calendar.calendars.list"
+            | "calendar.events.list"
             | "calendar.events.find"
             | "calendar.events.create"
             | "calendar.events.update"
@@ -466,7 +548,9 @@ fn execute_inner<C: GoogleCalendarClient>(
             UNSUPPORTED_ACTION,
         );
     }
-    if raw.get("calendarAlias").and_then(Value::as_str) != Some("family") {
+    if action_name != "calendar.calendars.list"
+        && raw.get("calendarAlias").and_then(Value::as_str) != Some("family")
+    {
         return serialize_error(
             request_id,
             action_name,
@@ -486,6 +570,30 @@ fn execute_inner<C: GoogleCalendarClient>(
     }
 
     match request {
+        NormalizedRequest::ListCalendars(request) => {
+            let family_calendar_id = CalendarAlias::Family.calendar_id();
+            let calendars = client.list_calendars()?;
+            let entries = calendars
+                .into_iter()
+                .enumerate()
+                .map(|(index, entry)| {
+                    shape_calendar_list_entry(index, entry, family_calendar_id.as_deref())
+                })
+                .collect::<Vec<_>>();
+            let configured_family_matches = entries
+                .iter()
+                .filter(|entry| entry.configured_as_family)
+                .count();
+            let success = CalendarListSuccess {
+                ok: true,
+                request_id: request.request_id,
+                action: request.action,
+                actor,
+                configured_family_matches,
+                calendars: entries,
+            };
+            serde_json::to_string(&success).map_err(|err| err.to_string())
+        }
         NormalizedRequest::ListOrFind(read) => {
             if !valid_time_window(&read.time_min, &read.time_max) {
                 return serialize_error(
@@ -664,6 +772,11 @@ struct ReadRequest {
     max_results: Option<u32>,
 }
 
+struct ListCalendarsRequest {
+    request_id: Option<String>,
+    action: &'static str,
+}
+
 struct CreateRequest {
     request_id: Option<String>,
     action: &'static str,
@@ -695,6 +808,7 @@ struct DeleteRequest {
 }
 
 enum NormalizedRequest {
+    ListCalendars(ListCalendarsRequest),
     ListOrFind(ReadRequest),
     Create(CreateRequest),
     Update(UpdateRequest),
@@ -704,6 +818,7 @@ enum NormalizedRequest {
 impl NormalizedRequest {
     fn request_id(&self) -> Option<String> {
         match self {
+            Self::ListCalendars(request) => request.request_id.clone(),
             Self::ListOrFind(request) => request.request_id.clone(),
             Self::Create(request) => request.request_id.clone(),
             Self::Update(request) => request.request_id.clone(),
@@ -713,6 +828,7 @@ impl NormalizedRequest {
 
     fn action(&self) -> &'static str {
         match self {
+            Self::ListCalendars(request) => request.action,
             Self::ListOrFind(request) => request.action,
             Self::Create(request) => request.action,
             Self::Update(request) => request.action,
@@ -722,6 +838,12 @@ impl NormalizedRequest {
 
     fn from_action(action: CalendarAction) -> Result<Self, String> {
         match action {
+            CalendarAction::ListCalendars { request_id } => {
+                Ok(Self::ListCalendars(ListCalendarsRequest {
+                    request_id,
+                    action: "calendar.calendars.list",
+                }))
+            }
             CalendarAction::ListEvents {
                 request_id,
                 calendar_alias,
@@ -806,7 +928,8 @@ impl NormalizedRequest {
 }
 
 const UNAUTHORIZED_ACTOR: &str = "This caller is not approved to access Simon calendar data.";
-const UNSUPPORTED_ACTION: &str = "Only configured Simon calendar event actions are supported.";
+const UNSUPPORTED_ACTION: &str =
+    "Only configured Simon calendar event and diagnostic actions are supported.";
 const UNSUPPORTED_CALENDAR_ALIAS: &str =
     "calendarAlias must be one of the configured Simon calendar aliases.";
 const INVALID_TIME_WINDOW: &str =
@@ -921,6 +1044,39 @@ fn shape_event(calendar_alias: CalendarAlias, event: GoogleEvent) -> CalendarEve
         all_day,
         location: event.location.filter(|value| !value.is_empty()),
         status: event.status.unwrap_or_else(|| "confirmed".to_string()),
+    }
+}
+
+fn shape_calendar_list_entry(
+    index: usize,
+    entry: GoogleCalendarListEntry,
+    family_calendar_id: Option<&str>,
+) -> CalendarListEntryDto {
+    let configured_as_family = family_calendar_id
+        .map(|calendar_id| calendar_id == entry.id)
+        .unwrap_or(false);
+    CalendarListEntryDto {
+        index,
+        summary: entry.summary.unwrap_or_else(|| "(No title)".to_string()),
+        primary: entry.primary.unwrap_or(false),
+        selected: entry.selected,
+        hidden: entry.hidden,
+        access_role: entry.access_role,
+        time_zone: entry.time_zone,
+        id_kind: calendar_id_kind(&entry.id),
+        configured_as_family,
+    }
+}
+
+fn calendar_id_kind(id: &str) -> &'static str {
+    if id == "primary" {
+        "primary"
+    } else if id.contains("@group.calendar.google.com") {
+        "google_group_calendar"
+    } else if id.contains('@') {
+        "email_like_calendar"
+    } else {
+        "other"
     }
 }
 
@@ -1178,6 +1334,7 @@ mod tests {
     #[test]
     fn schema_exposes_read_and_write_actions() {
         let schema = serde_json::to_string(&schemars::schema_for!(CalendarAction)).unwrap();
+        assert!(schema.contains("calendar.calendars.list"));
         assert!(schema.contains("calendar.events.list"));
         assert!(schema.contains("calendar.events.find"));
         assert!(schema.contains("calendar.events.create"));
