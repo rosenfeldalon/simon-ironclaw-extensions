@@ -8,6 +8,7 @@ This repo intentionally contains only distributable extension source, release bu
 
 - `extensions/simon-telegram-channel/`: custom IronClaw Telegram channel package named `simon_telegram_channel`.
 - `extensions/simon-google-calendar-tool/`: Simon-specific Google Calendar read/write tool package named `simon_google_calendar`.
+- `extensions/simon-daily-briefing/`: deterministic Family daily briefing tool package named `simon_daily_briefing`.
 
 ## Latest Bundle
 
@@ -52,8 +53,10 @@ The build script writes:
 ```text
 dist/ironclaw-upload/simon_telegram_channel.tar.gz
 dist/ironclaw-upload/simon_google_calendar.tar.gz
+dist/ironclaw-upload/simon_daily_briefing.tar.gz
 bundles/simon_telegram_channel/<version>.tar.gz
 bundles/simon_google_calendar/<version>.tar.gz
+bundles/simon_daily_briefing/<version>.tar.gz
 ```
 
 ## Public Safety Rule
@@ -82,6 +85,12 @@ iclab calendar contract
 ```
 
 Only publish the calendar tool after local fake-contract tests, capabilities inspection, and an explicit non-sensitive OAuth smoke pass.
+
+`simon_daily_briefing` `0.1.0` is the first hosted-install candidate for proactive day-start summaries. It is read-only, uses the same Family calendar alias and OAuth secret names as `simon_google_calendar`, and returns a deterministic Telegram-ready `messageText` plus structured event groups. Hosted install should use a public tag-backed raw URL from this repo, for example:
+
+```text
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-daily-briefing-0.1.0/bundles/simon_daily_briefing/0.1.0.tar.gz
+```
 
 ## Diagnostic Context
 

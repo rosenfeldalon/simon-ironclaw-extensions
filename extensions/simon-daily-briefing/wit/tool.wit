@@ -1,0 +1,64 @@
+package near:agent;
+
+interface host {
+  enum log-level {
+    trace,
+    debug,
+    info,
+    warn,
+    error,
+  }
+
+  record http-response {
+    status: u16,
+    headers-json: string,
+    body: list<u8>,
+  }
+
+  variant http-credential-location {
+    header(string),
+    bearer,
+    query(string),
+    url-path(string),
+  }
+
+  record http-credential {
+    secret-name: string,
+    location: http-credential-location,
+    value: string,
+  }
+
+  log: func(level: log-level, message: string);
+  secret-exists: func(name: string) -> bool;
+  secret-get: func(name: string) -> result<string, string>;
+  http-request: func(
+    method: string,
+    url: string,
+    headers-json: string,
+    body: option<list<u8>>,
+    timeout-ms: option<u32>,
+  ) -> result<http-response, string>;
+  workspace-read: func(path: string) -> option<string>;
+  workspace-write: func(path: string, content: string) -> result<_, string>;
+}
+
+interface tool {
+  record request {
+    params: string,
+    context: option<string>,
+  }
+
+  record response {
+    output: option<string>,
+    error: option<string>,
+  }
+
+  execute: func(req: request) -> response;
+  schema: func() -> string;
+  description: func() -> string;
+}
+
+world sandboxed-tool {
+  import host;
+  export tool;
+}
