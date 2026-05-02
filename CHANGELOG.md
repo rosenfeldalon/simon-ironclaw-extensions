@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12
+
+- Routes admitted Telegram turns into the resolved owner scope when `pairing_resolve_identity` succeeds, instead of using the canonical Simon family identity as the runtime `user_id`.
+- Keeps the canonical Simon identity in prompt-visible handoff context and private thread naming, so Telegram replies still speak as Simon to Alon while workspace/tool/secrets access stays in the owner scope.
+- Targets the live Railway failure where web-gateway `simon_google_calendar` calls succeed but Telegram-originated turns appear to land outside the owner workspace/tool domain.
+
 ## simon_google_calendar 0.2.4
 
 - Grants workspace read access for `.system/simon_google_calendar/` so the Family calendar alias can be resolved from IronClaw workspace state.

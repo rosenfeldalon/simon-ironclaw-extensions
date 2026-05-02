@@ -14,23 +14,23 @@ This repo intentionally contains only distributable extension source, release bu
 The latest public bundle is:
 
 ```text
-bundles/simon_telegram_channel/1.11.tar.gz
+bundles/simon_telegram_channel/1.12.tar.gz
 ```
 
-After pushing tag `ironclaw-simon-telegram-1.11`, the direct install URL is:
+After pushing tag `ironclaw-simon-telegram-1.12`, the direct install URL is:
 
 ```text
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.11/bundles/simon_telegram_channel/1.11.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.12/bundles/simon_telegram_channel/1.12.tar.gz
 ```
 
-Important: `1.11` keeps the `1.10` safety boundary, reinforces the Simon-vs-IronClaw assistant identity and `simon_google_calendar` JSON action shape in Telegram handoff context, and moves private Telegram messages onto a fresh thread namespace to avoid stale engine context. It should log `Simon Telegram channel runtime version 1.11` at startup.
+Important: `1.12` keeps the `1.11` safety boundary, but fixes the runtime ownership split by emitting admitted Telegram turns into the resolved owner scope while preserving canonical Simon identity in the prompt-visible handoff and private thread namespace. It should log `Simon Telegram channel runtime version 1.12` at startup.
 
 Install through IronClaw's extension URL installer/API with explicit channel kind:
 
 ```json
 {
   "name": "simon_telegram_channel",
-  "url": "https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.11/bundles/simon_telegram_channel/1.11.tar.gz",
+  "url": "https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.12/bundles/simon_telegram_channel/1.12.tar.gz",
   "kind": "wasm_channel"
 }
 ```
@@ -42,7 +42,7 @@ Do not use the Settings import flow for this `.tar.gz`; that path is for setting
 ```bash
 rustup target add wasm32-wasip2
 cargo fmt --check && cargo test --manifest-path extensions/simon-telegram-channel/Cargo.toml
-IRONCLAW_SIMON_TELEGRAM_BUNDLE_VERSION=1.11 \
+IRONCLAW_SIMON_TELEGRAM_BUNDLE_VERSION=1.12 \
 IRONCLAW_SIMON_CALENDAR_BUNDLE_VERSION=0.2.7 \
   ./scripts/build-ironclaw-upload-bundles.sh
 ```
@@ -67,7 +67,7 @@ For `simon_google_calendar`, keep live Google OAuth Client IDs, Client Secrets, 
 Before sharing an install URL, verify the pushed raw GitHub URL returns `200` and inspect the packaged capabilities JSON for:
 
 - `name: "simon_telegram_channel"`
-- `version: "1.11"`
+- `version: "1.12"`
 - `type: "channel"`
 - `wit_version: "0.3.0"`
 
@@ -87,4 +87,4 @@ Only publish the calendar tool after local fake-contract tests, capabilities ins
 
 The reusable lab at `/Users/alonr/projects/simon-ironclaw-lab` compares the built-in `telegram` channel and this custom `simon_telegram_channel` under the same fake Telegram pairing scenario.
 
-That lab found the `1.6` failure: the custom channel still used the built-in `/webhook/telegram` route, while IronClaw registers custom WASM channels at `/webhook/{channel_name}`. Version `1.7` aligned source, capabilities, and bundle metadata on `/webhook/simon_telegram_channel`; `1.8` added hosted diagnostics for the remaining admission/identity gap; `1.9` added the safety behavior for ignored unapproved Telegram messages and sanitized outbound raw errors; `1.10` suppresses Telegram auth status cards and starts a fresh private thread namespace; `1.11` refreshes the namespace again and injects stronger Simon/calendar tool handoff context for admitted Telegram turns.
+That lab found the `1.6` failure: the custom channel still used the built-in `/webhook/telegram` route, while IronClaw registers custom WASM channels at `/webhook/{channel_name}`. Version `1.7` aligned source, capabilities, and bundle metadata on `/webhook/simon_telegram_channel`; `1.8` added hosted diagnostics for the remaining admission/identity gap; `1.9` added the safety behavior for ignored unapproved Telegram messages and sanitized outbound raw errors; `1.10` suppresses Telegram auth status cards and starts a fresh private thread namespace; `1.11` refreshes the namespace again and injects stronger Simon/calendar tool handoff context for admitted Telegram turns; `1.12` fixes the owner-scope/runtime-user mismatch so Telegram turns can land in the same workspace/tool domain as successful web diagnostics.

@@ -276,7 +276,7 @@ const ALLOW_FROM_PATH: &str = "state/allow_from";
 
 /// Channel name for pairing store (used by pairing host APIs).
 const CHANNEL_NAME: &str = "simon_telegram_channel";
-const CHANNEL_VERSION: &str = "1.11";
+const CHANNEL_VERSION: &str = "1.12";
 const WEBHOOK_PATH: &str = "/webhook/simon_telegram_channel";
 const SIMON_THREAD_CONTEXT_VERSION: &str = "safety-2";
 
@@ -2296,6 +2296,30 @@ fn simon_chat_id_path_for_identity(identity: &str) -> Option<&'static str> {
     simon_identity_profile(identity).map(|profile| profile.chat_id_path)
 }
 
+fn runtime_user_scope_for_admitted_sender(
+    resolved_pairing_owner: Option<&str>,
+    identity: Option<SimonIdentityProfile>,
+    sender_id: &str,
+) -> String {
+    resolved_pairing_owner
+        .filter(|owner_id| !owner_id.trim().is_empty())
+        .map(str::to_string)
+        // Keep the canonical Simon identity only as a fallback when the
+        // pairing owner scope is unavailable. The runtime owner scope is what
+        // unlocks the deployed workspace, tools, and secrets domain.
+        .or_else(|| identity.map(|profile| profile.canonical_id.to_string()))
+        .unwrap_or_else(|| sender_id.to_string())
+}
+
+fn private_thread_identity_for_sender(
+    emitted_user_id: &str,
+    identity: Option<SimonIdentityProfile>,
+) -> String {
+    identity
+        .map(|profile| profile.canonical_id.to_string())
+        .unwrap_or_else(|| emitted_user_id.to_string())
+}
+
 fn pairing_store_allows_sender(sender_id: &str, username: Option<&str>) -> bool {
     match channel_host::pairing_read_allow_from(CHANNEL_NAME) {
         Ok(mut allowed) => {
@@ -2383,7 +2407,8 @@ fn handle_message(message: TelegramMessage) {
         .filter(|s| !s.is_empty())
         .and_then(|s| s.parse::<i64>().ok());
     let is_owner = owner_id == Some(from.id);
-    let is_resolved_pairing = resolved_pairing_owner_for_sender(&id_str).is_some();
+    let resolved_pairing_owner = resolved_pairing_owner_for_sender(&id_str);
+    let is_resolved_pairing = resolved_pairing_owner.is_some();
     let is_allowed_sender = pairing_store_allows_sender(&id_str, username_opt);
     let simon_identity =
         simon_identity_for_admitted_sender(is_owner || is_resolved_pairing || is_allowed_sender);
@@ -2487,14 +2512,18 @@ fn handle_message(message: TelegramMessage) {
     } else {
         from.first_name.clone()
     };
-    let emitted_user_id = simon_identity
-        .map(|profile| profile.canonical_id.to_string())
-        .unwrap_or_else(|| from.id.to_string());
+    let emitted_user_id = runtime_user_scope_for_admitted_sender(
+        resolved_pairing_owner.as_deref(),
+        simon_identity,
+        &id_str,
+    );
     let emitted_user_name = simon_display_name(simon_identity, user_name);
+    let private_thread_identity =
+        private_thread_identity_for_sender(&emitted_user_id, simon_identity);
     let thread_id = if is_private {
         Some(format!(
             "telegram-private:{}:{}",
-            SIMON_THREAD_CONTEXT_VERSION, emitted_user_id
+            SIMON_THREAD_CONTEXT_VERSION, private_thread_identity
         ))
     } else {
         Some(message.chat.id.to_string())
@@ -2976,6 +3005,30 @@ mod tests {
     #[test]
     fn test_simon_identity_for_unadmitted_sender_is_none() {
         assert_eq!(simon_identity_for_admitted_sender(false), None);
+    }
+
+    #[test]
+    fn test_runtime_user_scope_prefers_resolved_pairing_owner() {
+        assert_eq!(
+            runtime_user_scope_for_admitted_sender(Some("owner-scope"), Some(ALON_PROFILE), "123"),
+            "owner-scope"
+        );
+    }
+
+    #[test]
+    fn test_runtime_user_scope_falls_back_to_canonical_identity() {
+        assert_eq!(
+            runtime_user_scope_for_admitted_sender(None, Some(ALON_PROFILE), "123"),
+            "alon"
+        );
+    }
+
+    #[test]
+    fn test_private_thread_identity_stays_canonical_for_verified_sender() {
+        assert_eq!(
+            private_thread_identity_for_sender("owner-scope", Some(ALON_PROFILE)),
+            "alon"
+        );
     }
 
     #[test]
