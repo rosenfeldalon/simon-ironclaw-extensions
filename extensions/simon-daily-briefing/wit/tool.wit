@@ -1,64 +1,53 @@
-package near:agent;
+package near:agent@0.3.0;
 
 interface host {
-  enum log-level {
-    trace,
-    debug,
-    info,
-    warn,
-    error,
-  }
+    enum log-level {
+        trace,
+        debug,
+        info,
+        warn,
+        error,
+    }
 
-  record http-response {
-    status: u16,
-    headers-json: string,
-    body: list<u8>,
-  }
+    log: func(level: log-level, message: string);
+    now-millis: func() -> u64;
+    workspace-read: func(path: string) -> option<string>;
 
-  variant http-credential-location {
-    header(string),
-    bearer,
-    query(string),
-    url-path(string),
-  }
+    record http-response {
+        status: u16,
+        headers-json: string,
+        body: list<u8>,
+    }
 
-  record http-credential {
-    secret-name: string,
-    location: http-credential-location,
-    value: string,
-  }
+    http-request: func(
+        method: string,
+        url: string,
+        headers-json: string,
+        body: option<list<u8>>,
+        timeout-ms: option<u32>,
+    ) -> result<http-response, string>;
 
-  log: func(level: log-level, message: string);
-  secret-exists: func(name: string) -> bool;
-  secret-get: func(name: string) -> result<string, string>;
-  http-request: func(
-    method: string,
-    url: string,
-    headers-json: string,
-    body: option<list<u8>>,
-    timeout-ms: option<u32>,
-  ) -> result<http-response, string>;
-  workspace-read: func(path: string) -> option<string>;
-  workspace-write: func(path: string, content: string) -> result<_, string>;
+    tool-invoke: func(alias: string, params-json: string) -> result<string, string>;
+    secret-exists: func(name: string) -> bool;
 }
 
 interface tool {
-  record request {
-    params: string,
-    context: option<string>,
-  }
+    record request {
+        params: string,
+        context: option<string>,
+    }
 
-  record response {
-    output: option<string>,
-    error: option<string>,
-  }
+    record response {
+        output: option<string>,
+        error: option<string>,
+    }
 
-  execute: func(req: request) -> response;
-  schema: func() -> string;
-  description: func() -> string;
+    execute: func(req: request) -> response;
+    schema: func() -> string;
+    description: func() -> string;
 }
 
 world sandboxed-tool {
-  import host;
-  export tool;
+    import host;
+    export tool;
 }
