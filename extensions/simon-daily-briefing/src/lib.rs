@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, LocalResult, NaiveDate, TimeZone, Weekday};
+use chrono::{DateTime, Datelike, LocalResult, NaiveDate, TimeZone, Utc, Weekday};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -50,7 +50,8 @@ struct BriefingParams {
     action: String,
     #[serde(default, rename = "requestId")]
     request_id: Option<String>,
-    date: String,
+    #[serde(default)]
+    date: Option<String>,
     timezone: String,
     #[serde(rename = "calendarAlias")]
     calendar_alias: CalendarAlias,
@@ -176,6 +177,7 @@ struct DayWindow {
 }
 
 trait BriefingRuntime {
+    fn now_millis(&self) -> u64;
     fn secret_exists(&self, secret_name: &str) -> bool;
     fn family_calendar_id(&self) -> Option<String>;
     fn list_events(
@@ -190,6 +192,10 @@ trait BriefingRuntime {
 struct HostRuntime;
 
 impl BriefingRuntime for HostRuntime {
+    fn now_millis(&self) -> u64 {
+        near::agent::host::now_millis()
+    }
+
     fn secret_exists(&self, secret_name: &str) -> bool {
         near::agent::host::secret_exists(secret_name)
     }
@@ -301,7 +307,19 @@ fn execute_inner<R: BriefingRuntime>(params: &str, runtime: R) -> Result<String,
         );
     }
 
-    let Some(window) = compute_day_window(&request.date, &request.timezone) else {
+    let date = match resolve_requested_date(request.date.as_deref(), &request.timezone, &runtime) {
+        Some(date) => date,
+        None => {
+            return serialize_error(
+                request.request_id,
+                request.action,
+                "INVALID_DATE",
+                INVALID_DATE,
+            )
+        }
+    };
+
+    let Some(window) = compute_day_window(&date, &request.timezone) else {
         return serialize_error(
             request.request_id,
             request.action,
@@ -346,7 +364,7 @@ fn execute_inner<R: BriefingRuntime>(params: &str, runtime: R) -> Result<String,
     };
 
     let (all_day_events, timed_events) = shape_and_group_events(google_events, window.timezone);
-    let language = request.language.unwrap_or_default();
+    let language = request.language.unwrap_or(Language::He);
     let message_text = build_message(
         language,
         request.calendar_alias,
@@ -364,7 +382,7 @@ fn execute_inner<R: BriefingRuntime>(params: &str, runtime: R) -> Result<String,
         recipient_identity: request.recipient_identity.as_str(),
         calendar_alias: request.calendar_alias.as_str(),
         timezone: request.timezone,
-        date: request.date,
+        date,
         window_start: window.window_start,
         window_end: window.window_end,
         event_count,
@@ -378,7 +396,7 @@ fn execute_inner<R: BriefingRuntime>(params: &str, runtime: R) -> Result<String,
 
 const INVALID_JSON: &str = "Daily Briefing received invalid JSON parameters.";
 const INVALID_PARAMETERS: &str =
-    "Daily Briefing requires date, timezone, calendarAlias, and recipientIdentity.";
+    "Daily Briefing requires timezone, calendarAlias, and recipientIdentity. date is optional.";
 const UNSUPPORTED_ACTION: &str = "Daily Briefing supports only the generate_daily_briefing action.";
 const UNSUPPORTED_CALENDAR_ALIAS: &str =
     "calendarAlias must be one of Simon's configured Daily Briefing aliases.";
@@ -400,6 +418,30 @@ fn compute_day_window(date: &str, timezone: &str) -> Option<DayWindow> {
         window_start: start.to_rfc3339(),
         window_end: end.to_rfc3339(),
     })
+}
+
+fn resolve_requested_date<R: BriefingRuntime>(
+    requested_date: Option<&str>,
+    timezone: &str,
+    runtime: &R,
+) -> Option<String> {
+    match requested_date {
+        Some(date) => {
+            let trimmed = date.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        None => local_date_from_now(runtime.now_millis(), timezone),
+    }
+}
+
+fn local_date_from_now(now_millis: u64, timezone: &str) -> Option<String> {
+    let timezone: Tz = timezone.parse().ok()?;
+    let now = Utc.timestamp_millis_opt(now_millis as i64).single()?;
+    Some(now.with_timezone(&timezone).date_naive().to_string())
 }
 
 fn local_midnight(timezone: Tz, date: NaiveDate) -> Option<DateTime<Tz>> {
@@ -655,7 +697,7 @@ const SCHEMA: &str = r#"{
     },
     "date": {
       "type": "string",
-      "description": "Local family day in YYYY-MM-DD format."
+      "description": "Optional local family day in YYYY-MM-DD format. Defaults to today in the requested timezone."
     },
     "timezone": {
       "type": "string",
@@ -674,10 +716,10 @@ const SCHEMA: &str = r#"{
     "language": {
       "type": "string",
       "enum": ["en", "he"],
-      "description": "Optional message language for static headings. Defaults to en."
+      "description": "Optional message language for static headings. Defaults to he."
     }
   },
-  "required": ["action", "date", "timezone", "calendarAlias", "recipientIdentity"],
+  "required": ["action", "timezone", "calendarAlias", "recipientIdentity"],
   "additionalProperties": false
 }"#;
 
@@ -690,6 +732,7 @@ mod tests {
 
     #[derive(Default)]
     struct MockRuntime {
+        now_millis: u64,
         secret_exists: bool,
         family_calendar_id: Option<String>,
         events: Vec<GoogleEvent>,
@@ -697,6 +740,10 @@ mod tests {
     }
 
     impl BriefingRuntime for MockRuntime {
+        fn now_millis(&self) -> u64 {
+            self.now_millis
+        }
+
         fn secret_exists(&self, _secret_name: &str) -> bool {
             self.secret_exists
         }
@@ -748,6 +795,17 @@ mod tests {
         )
     }
 
+    fn request_json_without_date() -> String {
+        r#"{
+          "action":"generate_daily_briefing",
+          "requestId":"req-1",
+          "timezone":"Asia/Jerusalem",
+          "calendarAlias":"family",
+          "recipientIdentity":"alon"
+        }"#
+        .to_string()
+    }
+
     fn timed_event(title: &str, start: &str, end: &str, location: Option<&str>) -> GoogleEvent {
         GoogleEvent {
             summary: Some(title.to_string()),
@@ -782,9 +840,12 @@ mod tests {
         serde_json::from_str(output).expect("valid json output")
     }
 
+    const MAY_2_2026_UTC_MILLIS: u64 = 1_777_675_200_000;
+
     #[test]
     fn empty_day_returns_compact_message() {
         let runtime = MockRuntime {
+            now_millis: MAY_2_2026_UTC_MILLIS,
             secret_exists: true,
             family_calendar_id: Some("family-calendar-id".to_string()),
             events: Vec::new(),
@@ -805,6 +866,7 @@ mod tests {
     #[test]
     fn all_day_events_are_grouped_separately() {
         let runtime = MockRuntime {
+            now_millis: MAY_2_2026_UTC_MILLIS,
             secret_exists: true,
             family_calendar_id: Some("family-calendar-id".to_string()),
             events: vec![all_day_event("School vacation", "2026-05-02", "2026-05-03")],
@@ -826,6 +888,7 @@ mod tests {
     #[test]
     fn mixed_and_overlapping_events_are_sorted_and_grouped() {
         let runtime = MockRuntime {
+            now_millis: MAY_2_2026_UTC_MILLIS,
             secret_exists: true,
             family_calendar_id: Some("family-calendar-id".to_string()),
             events: vec![
@@ -870,6 +933,7 @@ mod tests {
     #[test]
     fn hebrew_and_english_titles_pass_through() {
         let runtime = MockRuntime {
+            now_millis: MAY_2_2026_UTC_MILLIS,
             secret_exists: true,
             family_calendar_id: Some("family-calendar-id".to_string()),
             events: vec![
@@ -914,6 +978,7 @@ mod tests {
     #[test]
     fn missing_auth_is_reported_without_host_error() {
         let runtime = MockRuntime {
+            now_millis: MAY_2_2026_UTC_MILLIS,
             secret_exists: false,
             family_calendar_id: Some("family-calendar-id".to_string()),
             events: Vec::new(),
@@ -930,6 +995,7 @@ mod tests {
     #[test]
     fn missing_family_alias_is_reported() {
         let runtime = MockRuntime {
+            now_millis: MAY_2_2026_UTC_MILLIS,
             secret_exists: true,
             family_calendar_id: None,
             events: Vec::new(),
@@ -946,6 +1012,7 @@ mod tests {
     #[test]
     fn calendar_lookup_errors_are_redacted() {
         let runtime = MockRuntime {
+            now_millis: MAY_2_2026_UTC_MILLIS,
             secret_exists: true,
             family_calendar_id: Some("family-calendar-id".to_string()),
             events: Vec::new(),
@@ -960,5 +1027,26 @@ mod tests {
         assert_eq!(parsed["error"]["code"], "CALENDAR_LOOKUP_FAILED");
         assert!(!serialized.contains("abc123"));
         assert!(!serialized.contains("raw google payload"));
+    }
+
+    #[test]
+    fn missing_date_defaults_to_local_today_in_jerusalem_and_hebrew() {
+        let runtime = MockRuntime {
+            now_millis: MAY_2_2026_UTC_MILLIS,
+            secret_exists: true,
+            family_calendar_id: Some("family-calendar-id".to_string()),
+            events: Vec::new(),
+            error: None,
+        };
+
+        let output = execute_inner(&request_json_without_date(), runtime).unwrap();
+        let parsed = parse_output(&output);
+
+        assert_eq!(parsed["ok"], true);
+        assert_eq!(parsed["date"], "2026-05-02");
+        assert!(parsed["messageText"]
+            .as_str()
+            .unwrap()
+            .contains("תדריך משפחתי"));
     }
 }

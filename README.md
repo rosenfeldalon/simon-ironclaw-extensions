@@ -86,10 +86,10 @@ iclab calendar contract
 
 Only publish the calendar tool after local fake-contract tests, capabilities inspection, and an explicit non-sensitive OAuth smoke pass.
 
-`simon_daily_briefing` `0.1.1` is the current hosted-install candidate for proactive day-start summaries. It is read-only, uses the same Family calendar alias and OAuth secret names as `simon_google_calendar`, and returns a deterministic Telegram-ready `messageText` plus structured event groups. Hosted install should use a public tag-backed raw URL from this repo, for example:
+`simon_daily_briefing` `0.1.2` is the current hosted-install candidate for proactive day-start summaries. It is read-only, uses the same Family calendar alias and OAuth secret names as `simon_google_calendar`, returns a deterministic Telegram-ready `messageText` plus structured event groups, defaults omitted `date` to the current `Asia/Jerusalem` day, and defaults static headings to Hebrew. Hosted install should use a public tag-backed raw URL from this repo, for example:
 
 ```text
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-daily-briefing-0.1.1/bundles/simon_daily_briefing/0.1.1.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-daily-briefing-0.1.2/bundles/simon_daily_briefing/0.1.2.tar.gz
 ```
 
 ## Diagnostic Context

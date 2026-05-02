@@ -2,13 +2,15 @@
 
 This is Simon's deterministic Daily Briefing tool for IronClaw.
 
-It is a custom WASM tool named `simon_daily_briefing`. Version `0.1.1` reads the same Family calendar alias and OAuth secret path used by the live `simon_google_calendar` tool, but narrows the behavior to one read-only action that returns a Telegram-ready day summary plus structured event groups for tests and previews.
+It is a custom WASM tool named `simon_daily_briefing`. Version `0.1.2` reads the same Family calendar alias and OAuth secret path used by the live `simon_google_calendar` tool, but narrows the behavior to one read-only action that returns a Telegram-ready day summary plus structured event groups for tests and previews.
 
 ## Current Scope
 
 - Accepts one action: `generate_daily_briefing`.
 - Requires an explicit local `date`, `timezone`, `calendarAlias`, and `recipientIdentity`.
-- Supports only `calendarAlias: "family"` in `0.1.1`.
+- Supports only `calendarAlias: "family"` in `0.1.2`.
+- Defaults `date` to today's local day in `Asia/Jerusalem` when omitted.
+- Defaults static heading language to Hebrew when `language` is omitted.
 - Uses `.system/simon_google_calendar/family_calendar_id` as the Family calendar source of truth.
 - Uses the shared Simon Google Calendar OAuth secret names so the briefing tool can follow the same configured calendar path as `simon_google_calendar`.
 - Returns one compact `messageText` plus structured `allDayEvents`, `timedEvents`, `eventCount`, `windowStart`, and `windowEnd`.
