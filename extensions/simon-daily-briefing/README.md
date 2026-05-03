@@ -2,20 +2,23 @@
 
 This is Simon's deterministic Daily Briefing tool for IronClaw.
 
-It is a custom WASM tool named `simon_daily_briefing`. Version `0.1.2` reads the same Family calendar alias and OAuth secret path used by the live `simon_google_calendar` tool, but narrows the behavior to one read-only action that returns a Telegram-ready day summary plus structured event groups for tests and previews.
+It is a custom WASM tool named `simon_daily_briefing`. Version `0.2.0` reads the same Family calendar alias and OAuth secret path used by the live `simon_google_calendar` tool, but now splits the work into a shared-facts stage plus a recipient-render stage for canonical Simon users.
 
 ## Current Scope
 
-- Accepts one action: `generate_daily_briefing`.
-- Requires an explicit local `date`, `timezone`, `calendarAlias`, and `recipientIdentity`.
-- Supports only `calendarAlias: "family"` in `0.1.2`.
+- Accepts three actions:
+  - `generate_daily_briefing`
+  - `generate_family_briefing_facts`
+  - `render_daily_briefing`
+- Supports only `calendarAlias: "family"` in `0.2.0`.
 - Defaults `date` to today's local day in `Asia/Jerusalem` when omitted.
-- Defaults static heading language to Hebrew when `language` is omitted.
+- Defaults static heading language from the canonical recipient profile when available, otherwise Hebrew.
 - Uses `.system/simon_google_calendar/family_calendar_id` as the Family calendar source of truth.
+- Reads recipient identity defaults from `channels/simon_telegram_channel/state/simon_family_profiles.json` when that shared registry exists.
 - Uses the shared Simon Google Calendar OAuth secret names so the briefing tool can follow the same configured calendar path as `simon_google_calendar`.
 - Returns one compact `messageText` plus structured `allDayEvents`, `timedEvents`, `eventCount`, `windowStart`, and `windowEnd`.
 - Makes only `GET` requests to Google Calendar and never creates, edits, deletes, invites, notifies, or sets reminders.
-- Keeps Shlomit's delivery routine out of v1 activation, but supports `recipientIdentity: "shlomit"` so the architecture is ready once onboarding gates pass.
+- Keeps Shlomit's delivery routine dormant by default, but supports `recipientIdentity: "shlomit"` so the install pack is ready once onboarding gates pass.
 
 ## Build
 
@@ -54,3 +57,5 @@ Name: simon_daily_briefing
 Kind: wasm_tool
 URL: <direct HTTPS URL ending in simon_daily_briefing.tar.gz>
 ```
+
+Do not use private `simon-docs` raw GitHub URLs for hosted installs.

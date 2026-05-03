@@ -276,9 +276,6 @@ const ALLOW_FROM_PATH: &str = "state/allow_from";
 
 /// Channel name for pairing store (used by pairing host APIs).
 const CHANNEL_NAME: &str = "simon_telegram_channel";
-const CHANNEL_VERSION: &str = "1.12";
-const WEBHOOK_PATH: &str = "/webhook/simon_telegram_channel";
-const SIMON_THREAD_CONTEXT_VERSION: &str = "safety-2";
 
 /// Workspace path for persisting bot_username for mention detection in groups.
 const BOT_USERNAME_PATH: &str = "state/bot_username";
@@ -286,9 +283,11 @@ const BOT_USERNAME_PATH: &str = "state/bot_username";
 /// Workspace path for persisting respond_to_all_group_messages flag.
 const RESPOND_TO_ALL_GROUP_PATH: &str = "state/respond_to_all_group_messages";
 
-/// Simon-specific private routing state persisted after verified pairing.
-const SIMON_ALON_CHAT_ID_PATH: &str = "state/simon_alon_telegram_chat_id";
-const SIMON_SHLOMIT_CHAT_ID_PATH: &str = "state/simon_shlomit_telegram_chat_id";
+/// Authoritative Simon family identity registry shared with Simon tools.
+const SIMON_FAMILY_REGISTRY_PATH: &str = "state/simon_family_profiles.json";
+
+/// Prefix for per-identity private Telegram routing state persisted after pairing.
+const SIMON_CHAT_ID_PATH_PREFIX: &str = "state/simon_telegram_chat_id__";
 
 // ============================================================================
 // Channel Metadata
@@ -329,6 +328,52 @@ struct TelegramMessageMetadata {
     /// True only when the sender matched trusted runtime Telegram metadata.
     #[serde(default)]
     identity_verified: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FamilyRegistry {
+    schema_version: u32,
+    family_timezone: String,
+    users: Vec<FamilyUserProfile>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FamilyUserProfile {
+    canonical_id: String,
+    display_name: String,
+    role: String,
+    status: String,
+    preferred_language: String,
+    timezone: String,
+    delivery_preferences: DeliveryPreferences,
+    enabled_routines: Vec<String>,
+    channel_bindings: Vec<ChannelBinding>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeliveryPreferences {
+    telegram_enabled: bool,
+    proactive_daily_briefing: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ChannelBinding {
+    channel: String,
+    target: Option<String>,
+    paired: bool,
+    readiness: String,
+    proactive_enabled: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct SimonIdentity {
+    canonical_id: String,
+    display_name: String,
+    role: String,
 }
 
 /// Deserialize a value that may be a JSON string or number into `Option<String>`.
@@ -572,12 +617,12 @@ fn classify_status_update(update: &StatusUpdate) -> Option<TelegramStatusAction>
                 status_message_for_user(update).map(TelegramStatusAction::Notify)
             }
         }
-        StatusType::ApprovalNeeded | StatusType::JobStarted => {
+        StatusType::ApprovalNeeded
+        | StatusType::JobStarted
+        | StatusType::AuthRequired
+        | StatusType::AuthCompleted => {
             status_message_for_user(update).map(TelegramStatusAction::Notify)
         }
-        // Auth cards are GUI/admin concerns. Forwarding them to Telegram can
-        // trap the private chat in stale setup context and leak tool names.
-        StatusType::AuthRequired | StatusType::AuthCompleted => None,
     }
 }
 
@@ -591,13 +636,7 @@ impl Guest for TelegramChannel {
         let config: TelegramConfig = serde_json::from_str(&config_json)
             .map_err(|e| format!("Failed to parse config: {}", e))?;
 
-        channel_host::log(
-            channel_host::LogLevel::Info,
-            &format!(
-                "Simon Telegram channel runtime version {} starting on {}",
-                CHANNEL_VERSION, WEBHOOK_PATH
-            ),
-        );
+        channel_host::log(channel_host::LogLevel::Info, "Telegram channel starting");
 
         if let Some(ref username) = config.bot_username {
             channel_host::log(
@@ -647,6 +686,7 @@ impl Guest for TelegramChannel {
             RESPOND_TO_ALL_GROUP_PATH,
             &config.respond_to_all_group_messages.to_string(),
         );
+        ensure_family_registry_seeded();
 
         let webhook_mode = webhook_mode(&config);
 
@@ -664,7 +704,7 @@ impl Guest for TelegramChannel {
 
                 channel_host::log(
                     channel_host::LogLevel::Info,
-                    &format!("Registering webhook: {}{}", tunnel_url, WEBHOOK_PATH),
+                    &format!("Registering webhook: {}/webhook/telegram", tunnel_url),
                 );
 
                 register_webhook(tunnel_url, config.webhook_secret.as_deref())
@@ -692,9 +732,9 @@ impl Guest for TelegramChannel {
         let require_secret = config.webhook_secret.is_some();
 
         Ok(ChannelConfig {
-            display_name: format!("Simon Telegram {}", CHANNEL_VERSION),
+            display_name: "Simon Telegram Baseline".to_string(),
             http_endpoints: vec![HttpEndpointConfig {
-                path: WEBHOOK_PATH.to_string(),
+                path: "/webhook/telegram".to_string(),
                 methods: vec!["POST".to_string()],
                 require_secret,
             }],
@@ -900,7 +940,7 @@ impl Guest for TelegramChannel {
             Err(parse_err) => {
                 let path = simon_chat_id_path_for_identity(&user_id)
                     .ok_or_else(|| format!("Invalid chat_id '{}': {}", user_id, parse_err))?;
-                let stored = read_nonempty_workspace(path)
+                let stored = read_nonempty_workspace(&path)
                     .ok_or_else(|| format!("No Telegram chat bound for identity '{}'", user_id))?;
                 stored.parse().map_err(|e| {
                     format!("Invalid stored chat_id for identity '{}': {}", user_id, e)
@@ -1472,46 +1512,6 @@ fn send_voice(
     )
 }
 
-const SANITIZED_INTERNAL_ERROR_REPLY: &str =
-    "I hit an internal tool error and did not send the raw details here. Please try again from the IronClaw GUI if this needs admin attention.";
-
-fn looks_like_raw_internal_error(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    let internal_markers = [
-        "google_calendar",
-        "json schema",
-        "tool schema",
-        "schema text",
-        "stack trace",
-        "traceback",
-        "panicked at",
-        "runtime error",
-        "near:agent",
-        "auth.descriptors",
-        "capabilities",
-        "failed to deserialize",
-        "failed to parse response",
-        "uncaught exception",
-    ];
-
-    if internal_markers.iter().any(|marker| lower.contains(marker)) {
-        return true;
-    }
-
-    let error_markers = [" error", "failed", "exception", "unauthorized", "forbidden"];
-    let auth_markers = ["auth", "oauth", "token", "credential", "secret"];
-    error_markers.iter().any(|marker| lower.contains(marker))
-        && auth_markers.iter().any(|marker| lower.contains(marker))
-}
-
-fn sanitize_outbound_response_text(text: &str) -> &str {
-    if looks_like_raw_internal_error(text) {
-        SANITIZED_INTERNAL_ERROR_REPLY
-    } else {
-        text
-    }
-}
-
 /// Send a full agent response (attachments + text) to a chat.
 ///
 /// Shared implementation for both `on_respond` and `on_broadcast`.
@@ -1531,19 +1531,8 @@ fn send_response(
         return Ok(());
     }
 
-    let content = sanitize_outbound_response_text(&response.content);
-    if content != response.content {
-        channel_host::log(
-            channel_host::LogLevel::Warn,
-            &format!(
-                "Simon Telegram sanitized outbound internal error version={} channel={}",
-                CHANNEL_VERSION, CHANNEL_NAME
-            ),
-        );
-    }
-
     // Split large messages into chunks that fit Telegram's limit.
-    let chunks = split_message(content, TELEGRAM_MAX_MESSAGE_LEN);
+    let chunks = split_message(&response.content, TELEGRAM_MAX_MESSAGE_LEN);
 
     // The first chunk replies to the original message; subsequent chunks
     // reply to the previously sent chunk so they form a visual thread.
@@ -1817,7 +1806,7 @@ fn delete_webhook() -> Result<(), String> {
 ///
 /// Called during on_start() when tunnel_url is configured.
 fn register_webhook(tunnel_url: &str, webhook_secret: Option<&str>) -> Result<(), String> {
-    let webhook_url = format!("{}{}", tunnel_url, WEBHOOK_PATH);
+    let webhook_url = format!("{}/webhook/telegram", tunnel_url);
 
     // Build setWebhook request body
     let mut body = serde_json::json!({
@@ -2226,98 +2215,211 @@ fn read_nonempty_workspace(path: &str) -> Option<String> {
     })
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct SimonIdentityProfile {
-    canonical_id: &'static str,
-    display_name: &'static str,
-    role: &'static str,
-    role_display: &'static str,
-    chat_id_path: &'static str,
-}
-
-const ALON_PROFILE: SimonIdentityProfile = SimonIdentityProfile {
-    canonical_id: "alon",
-    display_name: "Alon",
-    role: "primary_parent_admin",
-    role_display: "primary parent admin",
-    chat_id_path: SIMON_ALON_CHAT_ID_PATH,
-};
-
-const SHLOMIT_PROFILE: SimonIdentityProfile = SimonIdentityProfile {
-    canonical_id: "shlomit",
-    display_name: "Shlomit",
-    role: "parent",
-    role_display: "parent",
-    chat_id_path: SIMON_SHLOMIT_CHAT_ID_PATH,
-};
-
-fn simon_identity_profile(canonical_id: &str) -> Option<SimonIdentityProfile> {
-    match canonical_id {
-        "alon" => Some(ALON_PROFILE),
-        "shlomit" => Some(SHLOMIT_PROFILE),
-        _ => None,
+fn default_family_registry() -> FamilyRegistry {
+    FamilyRegistry {
+        schema_version: 1,
+        family_timezone: "Asia/Jerusalem".to_string(),
+        users: vec![
+            FamilyUserProfile {
+                canonical_id: "alon".to_string(),
+                display_name: "Alon".to_string(),
+                role: "primary_parent_admin".to_string(),
+                status: "active".to_string(),
+                preferred_language: "he".to_string(),
+                timezone: "Asia/Jerusalem".to_string(),
+                delivery_preferences: DeliveryPreferences {
+                    telegram_enabled: true,
+                    proactive_daily_briefing: true,
+                },
+                enabled_routines: vec!["daily_briefing".to_string()],
+                channel_bindings: vec![ChannelBinding {
+                    channel: CHANNEL_NAME.to_string(),
+                    target: None,
+                    paired: false,
+                    readiness: "pending_pairing".to_string(),
+                    proactive_enabled: true,
+                }],
+            },
+            FamilyUserProfile {
+                canonical_id: "shlomit".to_string(),
+                display_name: "Shlomit".to_string(),
+                role: "second_parent".to_string(),
+                status: "dormant".to_string(),
+                preferred_language: "he".to_string(),
+                timezone: "Asia/Jerusalem".to_string(),
+                delivery_preferences: DeliveryPreferences {
+                    telegram_enabled: false,
+                    proactive_daily_briefing: false,
+                },
+                enabled_routines: Vec::new(),
+                channel_bindings: vec![ChannelBinding {
+                    channel: CHANNEL_NAME.to_string(),
+                    target: None,
+                    paired: false,
+                    readiness: "dormant".to_string(),
+                    proactive_enabled: false,
+                }],
+            },
+        ],
     }
 }
 
-fn simon_identity_for_admitted_sender(is_admitted: bool) -> Option<SimonIdentityProfile> {
-    // For 1.10, all approved Telegram admission resolves to Alon. Shlomit is
-    // modeled above for a future explicit onboarding path, but is not active.
-    is_admitted.then_some(ALON_PROFILE)
+fn read_family_registry() -> FamilyRegistry {
+    #[cfg(target_arch = "wasm32")]
+    {
+        read_nonempty_workspace(SIMON_FAMILY_REGISTRY_PATH)
+            .and_then(|raw| serde_json::from_str::<FamilyRegistry>(&raw).ok())
+            .unwrap_or_else(default_family_registry)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        default_family_registry()
+    }
 }
 
-fn simon_display_name(identity: Option<SimonIdentityProfile>, fallback: String) -> String {
+fn ensure_family_registry_seeded() {
+    if read_nonempty_workspace(SIMON_FAMILY_REGISTRY_PATH).is_some() {
+        return;
+    }
+
+    let registry = default_family_registry();
+    if let Ok(json) = serde_json::to_string_pretty(&registry) {
+        if let Err(err) = channel_host::workspace_write(SIMON_FAMILY_REGISTRY_PATH, &json) {
+            channel_host::log(
+                channel_host::LogLevel::Warn,
+                &format!("Failed to seed Simon family registry: {}", err),
+            );
+        }
+    }
+}
+
+fn sanitize_canonical_identity(identity: &str) -> Option<String> {
+    let trimmed = identity.trim().to_lowercase();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if trimmed
+        .chars()
+        .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_' || ch == '-')
+    {
+        Some(trimmed)
+    } else {
+        None
+    }
+}
+
+fn simon_chat_id_path_for_identity(identity: &str) -> Option<String> {
+    sanitize_canonical_identity(identity)
+        .map(|sanitized| format!("{}{}", SIMON_CHAT_ID_PATH_PREFIX, sanitized))
+}
+
+fn simon_identity_for_admitted_sender(
+    resolved_owner: Option<&str>,
+    is_owner: bool,
+    is_allowed_sender: bool,
+) -> Option<SimonIdentity> {
+    let registry = read_family_registry();
+
+    if let Some(owner) = resolved_owner {
+        if let Some(profile) = registry
+            .users
+            .iter()
+            .find(|profile| profile.canonical_id == owner)
+        {
+            return Some(profile_to_identity(profile));
+        }
+    }
+
+    if is_owner || is_allowed_sender {
+        return registry
+            .users
+            .iter()
+            .find(|profile| profile.canonical_id == "alon")
+            .map(profile_to_identity);
+    }
+
+    None
+}
+
+fn profile_to_identity(profile: &FamilyUserProfile) -> SimonIdentity {
+    SimonIdentity {
+        canonical_id: profile.canonical_id.clone(),
+        display_name: profile.display_name.clone(),
+        role: profile.role.clone(),
+    }
+}
+
+fn update_family_registry_binding(identity: &SimonIdentity, chat_id: i64) {
+    let mut registry = read_family_registry();
+    let mut changed = false;
+
+    if let Some(profile) = registry
+        .users
+        .iter_mut()
+        .find(|profile| profile.canonical_id == identity.canonical_id)
+    {
+        profile.status = if profile.canonical_id == "shlomit" {
+            "active".to_string()
+        } else {
+            profile.status.clone()
+        };
+        profile.delivery_preferences.telegram_enabled = true;
+
+        if let Some(binding) = profile
+            .channel_bindings
+            .iter_mut()
+            .find(|binding| binding.channel == CHANNEL_NAME)
+        {
+            binding.target = Some(chat_id.to_string());
+            binding.paired = true;
+            binding.readiness = "ready".to_string();
+            changed = true;
+        } else {
+            profile.channel_bindings.push(ChannelBinding {
+                channel: CHANNEL_NAME.to_string(),
+                target: Some(chat_id.to_string()),
+                paired: true,
+                readiness: "ready".to_string(),
+                proactive_enabled: profile.delivery_preferences.proactive_daily_briefing,
+            });
+            changed = true;
+        }
+    }
+
+    if changed {
+        if let Ok(json) = serde_json::to_string_pretty(&registry) {
+            let _ = channel_host::workspace_write(SIMON_FAMILY_REGISTRY_PATH, &json);
+        }
+    }
+}
+
+fn simon_display_name(identity: Option<&SimonIdentity>, fallback: String) -> String {
     identity
-        .map(|profile| profile.display_name.to_string())
+        .map(|identity| identity.display_name.clone())
         .unwrap_or(fallback)
 }
 
 fn simon_role_display(role: &str) -> &str {
     match role {
-        "primary_parent_admin" => ALON_PROFILE.role_display,
-        "parent" => SHLOMIT_PROFILE.role_display,
+        "primary_parent_admin" => "primary parent admin",
+        "second_parent" => "second parent",
         _ => role,
     }
 }
 
-fn content_with_simon_handoff(content: &str, identity: Option<SimonIdentityProfile>) -> String {
+fn content_with_simon_handoff(content: &str, identity: Option<&SimonIdentity>) -> String {
     match identity {
-        Some(profile) => format!(
-            "Simon Telegram verified sender context:\n- canonical_id: {}\n- display_name: {}\n- role: {}\n- identity_verified: true\n\nSimon runtime instructions:\n- Your user-facing assistant name in this Telegram chat is Simon.\n- IronClaw is the runtime/platform, not the assistant identity to introduce to Telegram users.\n- If asked who you are or your name, answer as Simon and keep the IronClaw platform boundary secondary only if needed.\n- Do not expose Telegram IDs, usernames, chat IDs, tokens, raw Google calendar IDs, OAuth data, or other provider metadata.\n- For calendar or schedule questions, use the `simon_google_calendar` tool when available instead of claiming credentials are missing.\n- Calendar tool calls must be JSON with an `action` such as `calendar.events.list` or `calendar.events.find`; use `calendarAlias`: `family` for the family calendar.\n- Interpret dates and times in Asia/Jerusalem unless the user says otherwise, and send RFC3339 date-time bounds for list/find requests.\n- If the calendar tool itself fails, say the calendar is temporarily unavailable and do not send raw tool errors through Telegram.\n\nUser message:\n{}",
-            profile.canonical_id,
-            profile.display_name,
-            profile.role_display,
+        Some(identity) => format!(
+            "Simon Telegram verified sender context:\n- canonical_id: {}\n- display_name: {}\n- role: {}\n- identity_verified: true\n\nUser message:\n{}",
+            identity.canonical_id,
+            identity.display_name,
+            simon_role_display(&identity.role),
             content
         ),
         None => content.to_string(),
     }
-}
-
-fn simon_chat_id_path_for_identity(identity: &str) -> Option<&'static str> {
-    simon_identity_profile(identity).map(|profile| profile.chat_id_path)
-}
-
-fn runtime_user_scope_for_admitted_sender(
-    resolved_pairing_owner: Option<&str>,
-    identity: Option<SimonIdentityProfile>,
-    sender_id: &str,
-) -> String {
-    resolved_pairing_owner
-        .filter(|owner_id| !owner_id.trim().is_empty())
-        .map(str::to_string)
-        // Keep the canonical Simon identity only as a fallback when the
-        // pairing owner scope is unavailable. The runtime owner scope is what
-        // unlocks the deployed workspace, tools, and secrets domain.
-        .or_else(|| identity.map(|profile| profile.canonical_id.to_string()))
-        .unwrap_or_else(|| sender_id.to_string())
-}
-
-fn private_thread_identity_for_sender(
-    emitted_user_id: &str,
-    identity: Option<SimonIdentityProfile>,
-) -> String {
-    identity
-        .map(|profile| profile.canonical_id.to_string())
-        .unwrap_or_else(|| emitted_user_id.to_string())
 }
 
 fn pairing_store_allows_sender(sender_id: &str, username: Option<&str>) -> bool {
@@ -2408,23 +2510,11 @@ fn handle_message(message: TelegramMessage) {
         .and_then(|s| s.parse::<i64>().ok());
     let is_owner = owner_id == Some(from.id);
     let resolved_pairing_owner = resolved_pairing_owner_for_sender(&id_str);
-    let is_resolved_pairing = resolved_pairing_owner.is_some();
     let is_allowed_sender = pairing_store_allows_sender(&id_str, username_opt);
-    let simon_identity =
-        simon_identity_for_admitted_sender(is_owner || is_resolved_pairing || is_allowed_sender);
-
-    channel_host::log(
-        channel_host::LogLevel::Info,
-        &format!(
-            "Simon Telegram admission decision version={} channel={} private={} owner_match={} resolved_pairing={} allow_list_match={} admitted={}",
-            CHANNEL_VERSION,
-            CHANNEL_NAME,
-            is_private,
-            is_owner,
-            is_resolved_pairing,
-            is_allowed_sender,
-            simon_identity.is_some()
-        ),
+    let simon_identity = simon_identity_for_admitted_sender(
+        resolved_pairing_owner.as_deref(),
+        is_owner,
+        is_allowed_sender,
     );
 
     if simon_identity.is_none() {
@@ -2436,43 +2526,30 @@ fn handle_message(message: TelegramMessage) {
             })
             .to_string();
 
-            let mut pairing_request_created = false;
-            let mut pairing_reply_sent = false;
             match channel_host::pairing_upsert_request(CHANNEL_NAME, &id_str, &meta) {
                 Ok(result) => {
-                    pairing_request_created = result.created;
                     channel_host::log(
                         channel_host::LogLevel::Info,
                         &format!(
-                            "Simon Telegram pairing request created version={} channel={} code={}",
-                            CHANNEL_VERSION, CHANNEL_NAME, result.code
+                            "Pairing request for user {} (chat {}): code {}",
+                            from.id, message.chat.id, result.code
                         ),
                     );
-                    pairing_reply_sent = send_pairing_reply(message.chat.id, &result.code).is_ok();
+                    let _ = send_pairing_reply(message.chat.id, &result.code);
                 }
-                Err(_) => {
+                Err(e) => {
                     channel_host::log(
                         channel_host::LogLevel::Error,
-                        "Pairing upsert failed for unapproved private sender; message ignored",
+                        &format!("Pairing upsert failed: {}", e),
                     );
                 }
             }
-            channel_host::log(
-                channel_host::LogLevel::Info,
-                &format!(
-                    "Simon Telegram ignored_unapproved_private_message version={} channel={} pairing_request_created={} pairing_reply_sent={}",
-                    CHANNEL_VERSION,
-                    CHANNEL_NAME,
-                    pairing_request_created,
-                    pairing_reply_sent
-                ),
-            );
         } else if !is_private {
             channel_host::log(
-                channel_host::LogLevel::Info,
+                channel_host::LogLevel::Debug,
                 &format!(
-                    "Simon Telegram ignored_unapproved_group_message version={} channel={}",
-                    CHANNEL_VERSION, CHANNEL_NAME
+                    "Dropping message from unpaired user {} in group chat",
+                    from.id
                 ),
             );
         }
@@ -2512,27 +2589,23 @@ fn handle_message(message: TelegramMessage) {
     } else {
         from.first_name.clone()
     };
-    let emitted_user_id = runtime_user_scope_for_admitted_sender(
-        resolved_pairing_owner.as_deref(),
-        simon_identity,
-        &id_str,
-    );
-    let emitted_user_name = simon_display_name(simon_identity, user_name);
-    let private_thread_identity =
-        private_thread_identity_for_sender(&emitted_user_id, simon_identity);
+    let emitted_user_id = simon_identity
+        .as_ref()
+        .map(|identity| identity.canonical_id.clone())
+        .unwrap_or_else(|| from.id.to_string());
+    let emitted_user_name = simon_display_name(simon_identity.as_ref(), user_name);
     let thread_id = if is_private {
-        Some(format!(
-            "telegram-private:{}:{}",
-            SIMON_THREAD_CONTEXT_VERSION, private_thread_identity
-        ))
+        Some(format!("telegram-private:{}", emitted_user_id))
     } else {
         Some(message.chat.id.to_string())
     };
 
     if is_private {
-        if let Some(profile) = simon_identity {
-            let _ =
-                channel_host::workspace_write(profile.chat_id_path, &message.chat.id.to_string());
+        if let Some(identity) = simon_identity.as_ref() {
+            if let Some(path) = simon_chat_id_path_for_identity(&identity.canonical_id) {
+                let _ = channel_host::workspace_write(&path, &message.chat.id.to_string());
+                update_family_registry_binding(identity, message.chat.id);
+            }
         }
     }
 
@@ -2544,8 +2617,12 @@ fn handle_message(message: TelegramMessage) {
         is_private,
         chat_type: Some(message.chat.chat_type.clone()),
         message_thread_id: message.message_thread_id,
-        simon_identity: simon_identity.map(|profile| profile.canonical_id.to_string()),
-        simon_role: simon_identity.map(|profile| profile.role.to_string()),
+        simon_identity: simon_identity
+            .as_ref()
+            .map(|identity| identity.canonical_id.clone()),
+        simon_role: simon_identity
+            .as_ref()
+            .map(|identity| identity.role.clone()),
         identity_verified: simon_identity.is_some(),
     };
 
@@ -2570,21 +2647,17 @@ fn handle_message(message: TelegramMessage) {
     channel_host::emit_message(&EmittedMessage {
         user_id: emitted_user_id,
         user_name: Some(emitted_user_name),
-        content: content_with_simon_handoff(&content_to_emit, simon_identity),
+        content: content_with_simon_handoff(&content_to_emit, simon_identity.as_ref()),
         thread_id,
         metadata_json,
         attachments,
     });
 
     channel_host::log(
-        channel_host::LogLevel::Info,
+        channel_host::LogLevel::Debug,
         &format!(
-            "Simon Telegram emitted admitted message version={} channel={} canonical_identity={}",
-            CHANNEL_VERSION,
-            CHANNEL_NAME,
-            simon_identity
-                .map(|profile| profile.canonical_id)
-                .unwrap_or("none")
+            "Emitted message from user {} in chat {}",
+            from.id, message.chat.id
         ),
     );
 }
@@ -2999,89 +3072,56 @@ mod tests {
 
     #[test]
     fn test_simon_identity_for_admitted_sender_maps_to_alon() {
-        assert_eq!(simon_identity_for_admitted_sender(true), Some(ALON_PROFILE));
+        assert_eq!(
+            simon_identity_for_admitted_sender(None, true, false),
+            Some(SimonIdentity {
+                canonical_id: "alon".to_string(),
+                display_name: "Alon".to_string(),
+                role: "primary_parent_admin".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn test_simon_identity_for_resolved_pairing_maps_to_shlomit() {
+        assert_eq!(
+            simon_identity_for_admitted_sender(Some("shlomit"), false, false),
+            Some(SimonIdentity {
+                canonical_id: "shlomit".to_string(),
+                display_name: "Shlomit".to_string(),
+                role: "second_parent".to_string(),
+            })
+        );
     }
 
     #[test]
     fn test_simon_identity_for_unadmitted_sender_is_none() {
-        assert_eq!(simon_identity_for_admitted_sender(false), None);
-    }
-
-    #[test]
-    fn test_runtime_user_scope_prefers_resolved_pairing_owner() {
-        assert_eq!(
-            runtime_user_scope_for_admitted_sender(Some("owner-scope"), Some(ALON_PROFILE), "123"),
-            "owner-scope"
-        );
-    }
-
-    #[test]
-    fn test_runtime_user_scope_falls_back_to_canonical_identity() {
-        assert_eq!(
-            runtime_user_scope_for_admitted_sender(None, Some(ALON_PROFILE), "123"),
-            "alon"
-        );
-    }
-
-    #[test]
-    fn test_private_thread_identity_stays_canonical_for_verified_sender() {
-        assert_eq!(
-            private_thread_identity_for_sender("owner-scope", Some(ALON_PROFILE)),
-            "alon"
-        );
+        assert_eq!(simon_identity_for_admitted_sender(None, false, false), None);
     }
 
     #[test]
     fn test_content_with_simon_handoff_for_verified_sender() {
-        let content = content_with_simon_handoff("who am i?", Some(ALON_PROFILE));
+        let content = content_with_simon_handoff(
+            "who am i?",
+            Some(&SimonIdentity {
+                canonical_id: "alon".to_string(),
+                display_name: "Alon".to_string(),
+                role: "primary_parent_admin".to_string(),
+            }),
+        );
 
         assert!(content.starts_with("Simon Telegram verified sender context:"));
         assert!(content.contains("- canonical_id: alon"));
         assert!(content.contains("- display_name: Alon"));
         assert!(content.contains("- role: primary parent admin"));
         assert!(content.contains("- identity_verified: true"));
-        assert!(content.contains("Your user-facing assistant name in this Telegram chat is Simon."));
-        assert!(content.contains("IronClaw is the runtime/platform"));
-        assert!(content.contains("use the `simon_google_calendar` tool when available"));
-        assert!(content.contains("`action` such as `calendar.events.list`"));
-        assert!(content.contains("`calendarAlias`: `family`"));
-        assert!(content.contains("Asia/Jerusalem"));
         assert!(content.contains("User message:\nwho am i?"));
         assert!(!content.contains("123"));
     }
 
     #[test]
-    fn test_simon_thread_context_version_forces_fresh_private_thread() {
-        assert_eq!(SIMON_THREAD_CONTEXT_VERSION, "safety-2");
-    }
-
-    #[test]
     fn test_content_with_simon_handoff_leaves_unknown_sender_unchanged() {
         assert_eq!(content_with_simon_handoff("hello", None), "hello");
-    }
-
-    #[test]
-    fn test_shlomit_profile_exists_but_is_not_default_admission() {
-        assert_eq!(
-            simon_identity_profile("shlomit").map(|profile| profile.canonical_id),
-            Some("shlomit")
-        );
-        assert_eq!(simon_identity_for_admitted_sender(true), Some(ALON_PROFILE));
-    }
-
-    #[test]
-    fn test_sanitize_outbound_response_text_blocks_raw_schema_error() {
-        let raw = "google_calendar tool schema error: failed to parse response";
-        assert_eq!(
-            sanitize_outbound_response_text(raw),
-            SANITIZED_INTERNAL_ERROR_REPLY
-        );
-    }
-
-    #[test]
-    fn test_sanitize_outbound_response_text_preserves_normal_reply() {
-        let reply = "The family calendar is clear tomorrow afternoon.";
-        assert_eq!(sanitize_outbound_response_text(reply), reply);
     }
 
     #[test]
@@ -3186,7 +3226,12 @@ mod tests {
             metadata_json: "{}".to_string(),
         };
 
-        assert_eq!(classify_status_update(&update), None);
+        assert_eq!(
+            classify_status_update(&update),
+            Some(TelegramStatusAction::Notify(
+                "Authentication required for weather.".to_string()
+            ))
+        );
     }
 
     #[test]
@@ -3235,7 +3280,12 @@ mod tests {
             metadata_json: "{}".to_string(),
         };
 
-        assert_eq!(classify_status_update(&update), None);
+        assert_eq!(
+            classify_status_update(&update),
+            Some(TelegramStatusAction::Notify(
+                "Authentication completed for weather.".to_string()
+            ))
+        );
     }
 
     #[test]

@@ -1,0 +1,59 @@
+{
+  "version": "0.1.0",
+  "wit_version": "0.3.0",
+  "type": "tool",
+  "name": "simon_setup",
+  "description": "Simon install-pack setup tool. Generates canonical family registry previews, install/bootstrap runbooks, and per-user workspace seed docs for new Simon deployments.",
+  "setup": {
+    "required_fields": [
+      {
+        "name": "family_timezone",
+        "prompt": "Primary family timezone for Simon deployments",
+        "optional": false,
+        "setting_path": "extensions.simon_setup.family_timezone"
+      },
+      {
+        "name": "primary_parent_identity",
+        "prompt": "Canonical identity for the primary parent",
+        "optional": false,
+        "setting_path": "extensions.simon_setup.primary_parent_identity"
+      },
+      {
+        "name": "primary_parent_display_name",
+        "prompt": "Display name for the primary parent",
+        "optional": false,
+        "setting_path": "extensions.simon_setup.primary_parent_display_name"
+      },
+      {
+        "name": "primary_parent_language",
+        "prompt": "Preferred language for the primary parent (en or he)",
+        "optional": false,
+        "setting_path": "extensions.simon_setup.primary_parent_language"
+      },
+      {
+        "name": "second_parent_identity",
+        "prompt": "Canonical identity for the second parent",
+        "optional": false,
+        "setting_path": "extensions.simon_setup.second_parent_identity"
+      },
+      {
+        "name": "second_parent_display_name",
+        "prompt": "Display name for the second parent",
+        "optional": false,
+        "setting_path": "extensions.simon_setup.second_parent_display_name"
+      },
+      {
+        "name": "second_parent_language",
+        "prompt": "Preferred language for the second parent (en or he)",
+        "optional": false,
+        "setting_path": "extensions.simon_setup.second_parent_language"
+      },
+      {
+        "name": "second_parent_status",
+        "prompt": "Initial status for the second parent (active or dormant)",
+        "optional": false,
+        "setting_path": "extensions.simon_setup.second_parent_status"
+      }
+    ]
+  }
+}

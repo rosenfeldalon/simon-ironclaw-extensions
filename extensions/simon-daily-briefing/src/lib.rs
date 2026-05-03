@@ -12,8 +12,14 @@ const TOOL_NAME: &str = "simon_daily_briefing";
 const OAUTH_TOKEN_SECRET: &str = "simon_google_calendar_oauth_token";
 const DEFAULT_TIME_ZONE: &str = "Asia/Jerusalem";
 const FAMILY_CALENDAR_ID_PATH: &str = ".system/simon_google_calendar/family_calendar_id";
+const FAMILY_REGISTRY_PATH: &str =
+    "channels/simon_telegram_channel/state/simon_family_profiles.json";
 const CALENDAR_API_BASE: &str = "https://www.googleapis.com/calendar/v3";
 const DEFAULT_MAX_RESULTS: u32 = 50;
+
+const ACTION_GENERATE_DAILY_BRIEFING: &str = "generate_daily_briefing";
+const ACTION_GENERATE_FAMILY_FACTS: &str = "generate_family_briefing_facts";
+const ACTION_RENDER_DAILY_BRIEFING: &str = "render_daily_briefing";
 
 struct SimonDailyBriefingTool;
 
@@ -36,32 +42,14 @@ impl exports::near::agent::tool::Guest for SimonDailyBriefingTool {
     }
 
     fn description() -> String {
-        "Simon's deterministic daily briefing tool. Use this for proactive family schedule \
-         briefings after simon_google_calendar is configured. It reads the Family calendar, \
-         groups all-day and timed events for one local day, and returns the final Telegram-ready \
-         message text plus structured summary fields. This tool is read-only."
+        "Simon's deterministic daily briefing tool. It can generate shared family schedule facts \
+         for one local day, then render recipient-specific briefing messages for canonical Simon \
+         identities such as alon and shlomit. It is read-only and never writes to calendars."
             .to_string()
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct BriefingParams {
-    action: String,
-    #[serde(default, rename = "requestId")]
-    request_id: Option<String>,
-    #[serde(default)]
-    date: Option<String>,
-    timezone: String,
-    #[serde(rename = "calendarAlias")]
-    calendar_alias: CalendarAlias,
-    #[serde(rename = "recipientIdentity")]
-    recipient_identity: RecipientIdentity,
-    #[serde(default)]
-    language: Option<Language>,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum CalendarAlias {
     Family,
@@ -91,12 +79,69 @@ impl RecipientIdentity {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 enum Language {
     #[default]
     En,
     He,
+}
+
+impl Language {
+    fn as_str(self) -> &'static str {
+        match self {
+            Language::En => "en",
+            Language::He => "he",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FactsRequest {
+    #[serde(rename = "action")]
+    _action: String,
+    #[serde(default, rename = "requestId")]
+    request_id: Option<String>,
+    #[serde(default)]
+    date: Option<String>,
+    #[serde(default)]
+    timezone: Option<String>,
+    #[serde(rename = "calendarAlias")]
+    calendar_alias: CalendarAlias,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GenerateDailyBriefingRequest {
+    #[serde(rename = "action")]
+    _action: String,
+    #[serde(default, rename = "requestId")]
+    request_id: Option<String>,
+    #[serde(default)]
+    date: Option<String>,
+    #[serde(default)]
+    timezone: Option<String>,
+    #[serde(rename = "calendarAlias")]
+    calendar_alias: CalendarAlias,
+    #[serde(rename = "recipientIdentity")]
+    recipient_identity: RecipientIdentity,
+    #[serde(default)]
+    language: Option<Language>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RenderRequest {
+    #[serde(rename = "action")]
+    _action: String,
+    #[serde(default, rename = "requestId")]
+    request_id: Option<String>,
+    #[serde(rename = "recipientIdentity")]
+    recipient_identity: RecipientIdentity,
+    #[serde(default)]
+    language: Option<Language>,
+    facts: BriefingFactsPayload,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -124,7 +169,7 @@ struct GoogleEventTime {
     date_time: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct BriefingEvent {
     title: String,
@@ -135,18 +180,47 @@ struct BriefingEvent {
     location: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct BriefingFactsPayload {
+    calendar_alias: CalendarAlias,
+    timezone: String,
+    date: String,
+    window_start: String,
+    window_end: String,
+    all_day_events: Vec<BriefingEvent>,
+    timed_events: Vec<BriefingEvent>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct BriefingSuccess {
+struct BriefingFactsSuccess {
     ok: bool,
     request_id: Option<String>,
     action: &'static str,
-    recipient_identity: &'static str,
     calendar_alias: &'static str,
     timezone: String,
     date: String,
     window_start: String,
     window_end: String,
+    event_count: usize,
+    all_day_events: Vec<BriefingEvent>,
+    timed_events: Vec<BriefingEvent>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RenderedBriefingSuccess {
+    ok: bool,
+    request_id: Option<String>,
+    action: String,
+    recipient_identity: &'static str,
+    recipient_display_name: String,
+    recipient_status: String,
+    calendar_alias: &'static str,
+    timezone: String,
+    language: &'static str,
+    date: String,
     event_count: usize,
     all_day_events: Vec<BriefingEvent>,
     timed_events: Vec<BriefingEvent>,
@@ -170,16 +244,36 @@ struct ErrorBody {
 
 #[derive(Clone, Debug)]
 struct DayWindow {
-    date: NaiveDate,
     timezone: Tz,
     window_start: String,
     window_end: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FamilyRegistry {
+    #[serde(default)]
+    users: Vec<FamilyUserProfile>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FamilyUserProfile {
+    canonical_id: String,
+    display_name: String,
+    status: String,
+    #[serde(default)]
+    preferred_language: Option<String>,
+    #[serde(default)]
+    #[serde(rename = "timezone")]
+    _timezone: Option<String>,
 }
 
 trait BriefingRuntime {
     fn now_millis(&self) -> u64;
     fn secret_exists(&self, secret_name: &str) -> bool;
     fn family_calendar_id(&self) -> Option<String>;
+    fn family_registry_json(&self) -> Option<String>;
     fn list_events(
         &self,
         calendar_id: &str,
@@ -202,6 +296,12 @@ impl BriefingRuntime for HostRuntime {
 
     fn family_calendar_id(&self) -> Option<String> {
         near::agent::host::workspace_read(FAMILY_CALENDAR_ID_PATH)
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    }
+
+    fn family_registry_json(&self) -> Option<String> {
+        near::agent::host::workspace_read(FAMILY_REGISTRY_PATH)
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
     }
@@ -259,153 +359,361 @@ fn execute_inner<R: BriefingRuntime>(params: &str, runtime: R) -> Result<String,
     let action_name = raw_action_name(&raw);
     let request_id = raw_request_id(&raw);
 
-    if action_name != "generate_daily_briefing" {
-        return serialize_error(
+    match action_name.as_str() {
+        ACTION_GENERATE_DAILY_BRIEFING => {
+            let request: GenerateDailyBriefingRequest = match serde_json::from_value(raw) {
+                Ok(value) => value,
+                Err(_) => {
+                    return serialize_error(
+                        request_id,
+                        action_name,
+                        "INVALID_PARAMETERS",
+                        INVALID_PARAMETERS,
+                    )
+                }
+            };
+
+            let facts = match generate_facts(
+                request.request_id.clone(),
+                ACTION_GENERATE_DAILY_BRIEFING.to_string(),
+                request.date.as_deref(),
+                request.timezone.as_deref(),
+                request.calendar_alias,
+                &runtime,
+            ) {
+                Ok(facts) => facts,
+                Err(json) => return Ok(json),
+            };
+            render_success(
+                request.request_id,
+                ACTION_GENERATE_DAILY_BRIEFING.to_string(),
+                request.recipient_identity,
+                request.language,
+                facts,
+                &runtime,
+            )
+        }
+        ACTION_GENERATE_FAMILY_FACTS => {
+            let request: FactsRequest = match serde_json::from_value(raw) {
+                Ok(value) => value,
+                Err(_) => {
+                    return serialize_error(
+                        request_id,
+                        action_name,
+                        "INVALID_PARAMETERS",
+                        FACTS_INVALID_PARAMETERS,
+                    )
+                }
+            };
+
+            let facts = match generate_facts(
+                request.request_id.clone(),
+                ACTION_GENERATE_FAMILY_FACTS.to_string(),
+                request.date.as_deref(),
+                request.timezone.as_deref(),
+                request.calendar_alias,
+                &runtime,
+            ) {
+                Ok(facts) => facts,
+                Err(json) => return Ok(json),
+            };
+
+            serde_json::to_string(&facts).map_err(|err| err.to_string())
+        }
+        ACTION_RENDER_DAILY_BRIEFING => {
+            let request: RenderRequest = match serde_json::from_value(raw) {
+                Ok(value) => value,
+                Err(_) => {
+                    return serialize_error(
+                        request_id,
+                        action_name,
+                        "INVALID_PARAMETERS",
+                        RENDER_INVALID_PARAMETERS,
+                    )
+                }
+            };
+
+            render_success(
+                request.request_id,
+                ACTION_RENDER_DAILY_BRIEFING.to_string(),
+                request.recipient_identity,
+                request.language,
+                facts_payload_to_success(request.facts),
+                &runtime,
+            )
+        }
+        _ => serialize_error(
             request_id,
             action_name,
             "UNSUPPORTED_ACTION",
             UNSUPPORTED_ACTION,
-        );
+        ),
     }
+}
 
-    let request: BriefingParams = match serde_json::from_value(raw) {
-        Ok(value) => value,
-        Err(_) => {
-            return serialize_error(
-                request_id,
-                action_name,
-                "INVALID_PARAMETERS",
-                INVALID_PARAMETERS,
-            );
-        }
-    };
+const INVALID_JSON: &str = "Daily Briefing received invalid JSON parameters.";
+const INVALID_PARAMETERS: &str =
+    "generate_daily_briefing requires calendarAlias and recipientIdentity. date/timezone/language are optional.";
+const FACTS_INVALID_PARAMETERS: &str =
+    "generate_family_briefing_facts requires calendarAlias. date and timezone are optional.";
+const RENDER_INVALID_PARAMETERS: &str =
+    "render_daily_briefing requires recipientIdentity and a facts payload.";
+const UNSUPPORTED_ACTION: &str =
+    "Daily Briefing supports generate_daily_briefing, generate_family_briefing_facts, and render_daily_briefing.";
+const UNSUPPORTED_CALENDAR_ALIAS: &str =
+    "calendarAlias must be one of Simon's configured Daily Briefing aliases.";
+const INVALID_TIMEZONE: &str = "timezone must be a valid IANA timezone.";
+const INVALID_DATE: &str = "date must be a valid local calendar day in YYYY-MM-DD format.";
+const AUTH_REQUIRED: &str = "Simon Google Calendar OAuth is not configured for Daily Briefing.";
+const CALENDAR_ALIAS_NOT_CONFIGURED: &str =
+    "The Family calendar alias is not configured for Simon Daily Briefing.";
+const CALENDAR_LOOKUP_FAILED: &str = "Daily Briefing could not read the Family calendar right now.";
+const INVALID_RECIPIENT: &str =
+    "recipientIdentity must be one of Simon's canonical parent identities.";
 
-    if request.action != "generate_daily_briefing" {
-        return serialize_error(
-            request.request_id,
-            request.action,
-            "UNSUPPORTED_ACTION",
-            UNSUPPORTED_ACTION,
-        );
-    }
-
-    if request.calendar_alias != CalendarAlias::Family {
-        return serialize_error(
-            request.request_id,
-            request.action,
+fn generate_facts<R: BriefingRuntime>(
+    request_id: Option<String>,
+    action: String,
+    requested_date: Option<&str>,
+    requested_timezone: Option<&str>,
+    calendar_alias: CalendarAlias,
+    runtime: &R,
+) -> Result<BriefingFactsSuccess, String> {
+    if calendar_alias != CalendarAlias::Family {
+        return Err(error_json(
+            request_id,
+            action,
             "UNSUPPORTED_CALENDAR_ALIAS",
             UNSUPPORTED_CALENDAR_ALIAS,
-        );
+        ));
     }
 
-    if request.timezone != DEFAULT_TIME_ZONE {
-        return serialize_error(
-            request.request_id,
-            request.action,
-            "UNSUPPORTED_TIMEZONE",
-            UNSUPPORTED_TIMEZONE,
-        );
+    let timezone = requested_timezone.unwrap_or(DEFAULT_TIME_ZONE).trim();
+    if timezone.parse::<Tz>().is_err() {
+        return Err(error_json(
+            request_id,
+            action,
+            "INVALID_TIMEZONE",
+            INVALID_TIMEZONE,
+        ));
     }
 
-    let date = match resolve_requested_date(request.date.as_deref(), &request.timezone, &runtime) {
+    let date = match resolve_requested_date(requested_date, timezone, runtime) {
         Some(date) => date,
-        None => {
-            return serialize_error(
-                request.request_id,
-                request.action,
-                "INVALID_DATE",
-                INVALID_DATE,
-            )
-        }
+        None => return Err(error_json(request_id, action, "INVALID_DATE", INVALID_DATE)),
     };
 
-    let Some(window) = compute_day_window(&date, &request.timezone) else {
-        return serialize_error(
-            request.request_id,
-            request.action,
-            "INVALID_DATE",
-            INVALID_DATE,
-        );
+    let Some(window) = compute_day_window(&date, timezone) else {
+        return Err(error_json(request_id, action, "INVALID_DATE", INVALID_DATE));
     };
 
     if !runtime.secret_exists(OAUTH_TOKEN_SECRET) {
-        return serialize_error(
-            request.request_id,
-            request.action,
+        return Err(error_json(
+            request_id,
+            action,
             "AUTH_REQUIRED",
             AUTH_REQUIRED,
-        );
+        ));
     }
 
     let Some(calendar_id) = runtime.family_calendar_id() else {
-        return serialize_error(
-            request.request_id,
-            request.action,
+        return Err(error_json(
+            request_id,
+            action,
             "CALENDAR_ALIAS_NOT_CONFIGURED",
             CALENDAR_ALIAS_NOT_CONFIGURED,
-        );
+        ));
     };
 
     let google_events = match runtime.list_events(
         &calendar_id,
         &window.window_start,
         &window.window_end,
-        &request.timezone,
+        timezone,
     ) {
         Ok(events) => events,
         Err(_) => {
-            return serialize_error(
-                request.request_id,
-                request.action,
+            return Err(error_json(
+                request_id,
+                action,
                 "CALENDAR_LOOKUP_FAILED",
                 CALENDAR_LOOKUP_FAILED,
-            );
+            ))
         }
     };
 
     let (all_day_events, timed_events) = shape_and_group_events(google_events, window.timezone);
-    let language = request.language.unwrap_or(Language::He);
-    let message_text = build_message(
-        language,
-        request.calendar_alias,
-        window.date,
-        &all_day_events,
-        &timed_events,
-        window.timezone,
-    );
-
     let event_count = all_day_events.len() + timed_events.len();
-    let success = BriefingSuccess {
+
+    Ok(BriefingFactsSuccess {
         ok: true,
-        request_id: request.request_id,
-        action: "generate_daily_briefing",
-        recipient_identity: request.recipient_identity.as_str(),
-        calendar_alias: request.calendar_alias.as_str(),
-        timezone: request.timezone,
+        request_id,
+        action: ACTION_GENERATE_FAMILY_FACTS,
+        calendar_alias: calendar_alias.as_str(),
+        timezone: timezone.to_string(),
         date,
         window_start: window.window_start,
         window_end: window.window_end,
         event_count,
         all_day_events,
         timed_events,
+    })
+}
+
+fn render_success<R: BriefingRuntime>(
+    request_id: Option<String>,
+    action: String,
+    recipient_identity: RecipientIdentity,
+    requested_language: Option<Language>,
+    facts: BriefingFactsSuccess,
+    runtime: &R,
+) -> Result<String, String> {
+    let profile = load_recipient_profile(runtime, recipient_identity).ok_or_else(|| {
+        serialize_error(
+            request_id.clone(),
+            action.clone(),
+            "INVALID_RECIPIENT",
+            INVALID_RECIPIENT,
+        )
+        .unwrap_err_or_json()
+    })?;
+
+    let timezone: Tz = facts
+        .timezone
+        .parse()
+        .map_err(|_| "facts timezone must be a valid IANA timezone".to_string())?;
+    let date = NaiveDate::parse_from_str(&facts.date, "%Y-%m-%d")
+        .map_err(|_| "facts date invalid".to_string())?;
+    let language = requested_language
+        .or_else(|| profile.preferred_language)
+        .unwrap_or(Language::He);
+
+    let message_text = build_message(
+        language,
+        date,
+        &facts.all_day_events,
+        &facts.timed_events,
+        timezone,
+    );
+
+    let rendered = RenderedBriefingSuccess {
+        ok: true,
+        request_id,
+        action,
+        recipient_identity: recipient_identity.as_str(),
+        recipient_display_name: profile.display_name,
+        recipient_status: profile.status,
+        calendar_alias: facts.calendar_alias,
+        timezone: facts.timezone,
+        language: language.as_str(),
+        date: facts.date,
+        event_count: facts.event_count,
+        all_day_events: facts.all_day_events,
+        timed_events: facts.timed_events,
         message_text,
     };
 
-    serde_json::to_string(&success).map_err(|err| err.to_string())
+    serde_json::to_string(&rendered).map_err(|err| err.to_string())
 }
 
-const INVALID_JSON: &str = "Daily Briefing received invalid JSON parameters.";
-const INVALID_PARAMETERS: &str =
-    "Daily Briefing requires timezone, calendarAlias, and recipientIdentity. date is optional.";
-const UNSUPPORTED_ACTION: &str = "Daily Briefing supports only the generate_daily_briefing action.";
-const UNSUPPORTED_CALENDAR_ALIAS: &str =
-    "calendarAlias must be one of Simon's configured Daily Briefing aliases.";
-const UNSUPPORTED_TIMEZONE: &str = "Daily Briefing currently supports only Asia/Jerusalem.";
-const INVALID_DATE: &str = "date must be a valid local calendar day in YYYY-MM-DD format.";
-const AUTH_REQUIRED: &str = "Simon Google Calendar OAuth is not configured for Daily Briefing.";
-const CALENDAR_ALIAS_NOT_CONFIGURED: &str =
-    "The Family calendar alias is not configured for Simon Daily Briefing.";
-const CALENDAR_LOOKUP_FAILED: &str = "Daily Briefing could not read the Family calendar right now.";
+trait JsonResultExt {
+    fn unwrap_err_or_json(self) -> String;
+}
+
+impl JsonResultExt for Result<String, String> {
+    fn unwrap_err_or_json(self) -> String {
+        match self {
+            Ok(value) => value,
+            Err(err) => err,
+        }
+    }
+}
+
+fn error_json(
+    request_id: Option<String>,
+    action: String,
+    code: &'static str,
+    message: &'static str,
+) -> String {
+    match serialize_error(request_id, action, code, message) {
+        Ok(json) => json,
+        Err(err) => err,
+    }
+}
+
+fn load_recipient_profile<R: BriefingRuntime>(
+    runtime: &R,
+    recipient_identity: RecipientIdentity,
+) -> Option<ResolvedRecipientProfile> {
+    let canonical_id = recipient_identity.as_str();
+
+    if let Some(raw) = runtime.family_registry_json() {
+        if let Ok(registry) = serde_json::from_str::<FamilyRegistry>(&raw) {
+            if let Some(profile) = registry
+                .users
+                .into_iter()
+                .find(|profile| profile.canonical_id == canonical_id)
+            {
+                return Some(ResolvedRecipientProfile {
+                    display_name: profile.display_name,
+                    status: profile.status,
+                    preferred_language: parse_profile_language(
+                        profile.preferred_language.as_deref(),
+                    ),
+                });
+            }
+        }
+    }
+
+    Some(default_recipient_profile(recipient_identity))
+}
+
+#[derive(Clone, Debug)]
+struct ResolvedRecipientProfile {
+    display_name: String,
+    status: String,
+    preferred_language: Option<Language>,
+}
+
+fn default_recipient_profile(recipient_identity: RecipientIdentity) -> ResolvedRecipientProfile {
+    match recipient_identity {
+        RecipientIdentity::Alon => ResolvedRecipientProfile {
+            display_name: "Alon".to_string(),
+            status: "active".to_string(),
+            preferred_language: Some(Language::He),
+        },
+        RecipientIdentity::Shlomit => ResolvedRecipientProfile {
+            display_name: "Shlomit".to_string(),
+            status: "dormant".to_string(),
+            preferred_language: Some(Language::He),
+        },
+    }
+}
+
+fn parse_profile_language(value: Option<&str>) -> Option<Language> {
+    match value.unwrap_or_default().trim().to_lowercase().as_str() {
+        "en" => Some(Language::En),
+        "he" => Some(Language::He),
+        _ => None,
+    }
+}
+
+fn facts_payload_to_success(payload: BriefingFactsPayload) -> BriefingFactsSuccess {
+    let event_count = payload.all_day_events.len() + payload.timed_events.len();
+    BriefingFactsSuccess {
+        ok: true,
+        request_id: None,
+        action: ACTION_GENERATE_FAMILY_FACTS,
+        calendar_alias: payload.calendar_alias.as_str(),
+        timezone: payload.timezone,
+        date: payload.date,
+        window_start: payload.window_start,
+        window_end: payload.window_end,
+        event_count,
+        all_day_events: payload.all_day_events,
+        timed_events: payload.timed_events,
+    }
+}
 
 fn compute_day_window(date: &str, timezone: &str) -> Option<DayWindow> {
     let date = NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
@@ -413,7 +721,6 @@ fn compute_day_window(date: &str, timezone: &str) -> Option<DayWindow> {
     let start = local_midnight(timezone, date)?;
     let end = local_midnight(timezone, date.succ_opt()?)?;
     Some(DayWindow {
-        date,
         timezone,
         window_start: start.to_rfc3339(),
         window_end: end.to_rfc3339(),
@@ -509,7 +816,6 @@ fn shape_event(event: GoogleEvent) -> BriefingEvent {
 
 fn build_message(
     language: Language,
-    _calendar_alias: CalendarAlias,
     date: NaiveDate,
     all_day_events: &[BriefingEvent],
     timed_events: &[BriefingEvent],
@@ -685,11 +991,15 @@ const HEX: [u8; 16] = *b"0123456789ABCDEF";
 
 const SCHEMA: &str = r#"{
   "type": "object",
-  "description": "Generate Simon's deterministic daily family briefing for one local day and one parent identity.",
+  "description": "Generate Simon's shared family briefing facts or render a recipient-specific daily briefing message.",
   "properties": {
     "action": {
       "type": "string",
-      "const": "generate_daily_briefing"
+      "enum": [
+        "generate_daily_briefing",
+        "generate_family_briefing_facts",
+        "render_daily_briefing"
+      ]
     },
     "requestId": {
       "type": "string",
@@ -701,25 +1011,26 @@ const SCHEMA: &str = r#"{
     },
     "timezone": {
       "type": "string",
-      "description": "IANA timezone. V1 supports Asia/Jerusalem."
+      "description": "Optional IANA timezone. Defaults to Asia/Jerusalem."
     },
     "calendarAlias": {
       "type": "string",
-      "enum": ["family"],
-      "description": "Configured Simon calendar alias."
+      "enum": ["family"]
     },
     "recipientIdentity": {
       "type": "string",
-      "enum": ["alon", "shlomit"],
-      "description": "Canonical parent identity that this briefing is being prepared for."
+      "enum": ["alon", "shlomit"]
     },
     "language": {
       "type": "string",
-      "enum": ["en", "he"],
-      "description": "Optional message language for static headings. Defaults to he."
+      "enum": ["en", "he"]
+    },
+    "facts": {
+      "type": "object",
+      "description": "Shared facts payload returned by generate_family_briefing_facts."
     }
   },
-  "required": ["action", "timezone", "calendarAlias", "recipientIdentity"],
+  "required": ["action"],
   "additionalProperties": false
 }"#;
 
@@ -735,6 +1046,7 @@ mod tests {
         now_millis: u64,
         secret_exists: bool,
         family_calendar_id: Option<String>,
+        family_registry_json: Option<String>,
         events: Vec<GoogleEvent>,
         error: Option<String>,
     }
@@ -752,6 +1064,10 @@ mod tests {
             self.family_calendar_id.clone()
         }
 
+        fn family_registry_json(&self) -> Option<String> {
+            self.family_registry_json.clone()
+        }
+
         fn list_events(
             &self,
             _calendar_id: &str,
@@ -760,293 +1076,185 @@ mod tests {
             _timezone: &str,
         ) -> Result<Vec<GoogleEvent>, String> {
             match &self.error {
-                Some(error) => Err(error.clone()),
+                Some(err) => Err(err.clone()),
                 None => Ok(self.events.clone()),
             }
         }
     }
 
-    fn request_json(date: &str) -> String {
-        format!(
-            r#"{{
-              "action":"generate_daily_briefing",
-              "requestId":"req-1",
-              "date":"{}",
-              "timezone":"Asia/Jerusalem",
-              "calendarAlias":"family",
-              "recipientIdentity":"alon",
-              "language":"en"
-            }}"#,
-            date
-        )
-    }
-
-    fn hebrew_request_json(date: &str) -> String {
-        format!(
-            r#"{{
-              "action":"generate_daily_briefing",
-              "date":"{}",
-              "timezone":"Asia/Jerusalem",
-              "calendarAlias":"family",
-              "recipientIdentity":"shlomit",
-              "language":"he"
-            }}"#,
-            date
-        )
-    }
-
-    fn request_json_without_date() -> String {
-        r#"{
-          "action":"generate_daily_briefing",
-          "requestId":"req-1",
-          "timezone":"Asia/Jerusalem",
-          "calendarAlias":"family",
-          "recipientIdentity":"alon"
-        }"#
-        .to_string()
-    }
-
-    fn timed_event(title: &str, start: &str, end: &str, location: Option<&str>) -> GoogleEvent {
-        GoogleEvent {
-            summary: Some(title.to_string()),
-            start: GoogleEventTime {
-                date: None,
-                date_time: Some(start.to_string()),
-            },
-            end: GoogleEventTime {
-                date: None,
-                date_time: Some(end.to_string()),
-            },
-            location: location.map(str::to_string),
+    fn base_runtime() -> MockRuntime {
+        MockRuntime {
+            now_millis: 1_777_680_000_000,
+            secret_exists: true,
+            family_calendar_id: Some("family-calendar".to_string()),
+            family_registry_json: None,
+            events: vec![
+                GoogleEvent {
+                    summary: Some("Morning dropoff".to_string()),
+                    start: GoogleEventTime {
+                        date: None,
+                        date_time: Some("2026-05-02T08:15:00+03:00".to_string()),
+                    },
+                    end: GoogleEventTime {
+                        date: None,
+                        date_time: Some("2026-05-02T09:05:00+03:00".to_string()),
+                    },
+                    location: Some("Givatayim".to_string()),
+                },
+                GoogleEvent {
+                    summary: Some("Dentist".to_string()),
+                    start: GoogleEventTime {
+                        date: None,
+                        date_time: Some("2026-05-02T12:40:00+03:00".to_string()),
+                    },
+                    end: GoogleEventTime {
+                        date: None,
+                        date_time: Some("2026-05-02T13:40:00+03:00".to_string()),
+                    },
+                    location: None,
+                },
+            ],
+            error: None,
         }
     }
 
-    fn all_day_event(title: &str, start: &str, end: &str) -> GoogleEvent {
-        GoogleEvent {
-            summary: Some(title.to_string()),
-            start: GoogleEventTime {
-                date: Some(start.to_string()),
-                date_time: None,
-            },
-            end: GoogleEventTime {
-                date: Some(end.to_string()),
-                date_time: None,
-            },
-            location: None,
-        }
-    }
-
-    fn parse_output(output: &str) -> Value {
+    fn decode_json(output: &str) -> Value {
         serde_json::from_str(output).expect("valid json output")
     }
 
-    const MAY_2_2026_UTC_MILLIS: u64 = 1_777_675_200_000;
-
     #[test]
-    fn empty_day_returns_compact_message() {
-        let runtime = MockRuntime {
-            now_millis: MAY_2_2026_UTC_MILLIS,
-            secret_exists: true,
-            family_calendar_id: Some("family-calendar-id".to_string()),
-            events: Vec::new(),
-            error: None,
-        };
+    fn legacy_generate_daily_briefing_returns_message_and_events() {
+        let output = execute_inner(
+            r#"{
+                "action":"generate_daily_briefing",
+                "date":"2026-05-02",
+                "timezone":"Asia/Jerusalem",
+                "calendarAlias":"family",
+                "recipientIdentity":"alon"
+            }"#,
+            base_runtime(),
+        )
+        .unwrap();
 
-        let output = execute_inner(&request_json("2026-05-02"), runtime).unwrap();
-        let parsed = parse_output(&output);
-
-        assert_eq!(parsed["ok"], true);
-        assert_eq!(parsed["eventCount"], 0);
-        assert!(parsed["messageText"]
-            .as_str()
-            .unwrap()
-            .contains("Nothing is scheduled on the family calendar today."));
-    }
-
-    #[test]
-    fn all_day_events_are_grouped_separately() {
-        let runtime = MockRuntime {
-            now_millis: MAY_2_2026_UTC_MILLIS,
-            secret_exists: true,
-            family_calendar_id: Some("family-calendar-id".to_string()),
-            events: vec![all_day_event("School vacation", "2026-05-02", "2026-05-03")],
-            error: None,
-        };
-
-        let output = execute_inner(&request_json("2026-05-02"), runtime).unwrap();
-        let parsed = parse_output(&output);
-
-        assert_eq!(parsed["allDayEvents"].as_array().unwrap().len(), 1);
-        assert_eq!(parsed["timedEvents"].as_array().unwrap().len(), 0);
-        assert!(parsed["messageText"].as_str().unwrap().contains("All day"));
-        assert!(parsed["messageText"]
-            .as_str()
-            .unwrap()
-            .contains("School vacation"));
-    }
-
-    #[test]
-    fn mixed_and_overlapping_events_are_sorted_and_grouped() {
-        let runtime = MockRuntime {
-            now_millis: MAY_2_2026_UTC_MILLIS,
-            secret_exists: true,
-            family_calendar_id: Some("family-calendar-id".to_string()),
-            events: vec![
-                timed_event(
-                    "Pickup",
-                    "2026-05-02T15:00:00+03:00",
-                    "2026-05-02T15:30:00+03:00",
-                    None,
-                ),
-                all_day_event("Birthday", "2026-05-02", "2026-05-03"),
-                timed_event(
-                    "Doctor",
-                    "2026-05-02T09:00:00+03:00",
-                    "2026-05-02T09:30:00+03:00",
-                    Some("Clinic"),
-                ),
-                timed_event(
-                    "Overlap",
-                    "2026-05-02T09:15:00+03:00",
-                    "2026-05-02T10:00:00+03:00",
-                    None,
-                ),
-            ],
-            error: None,
-        };
-
-        let output = execute_inner(&request_json("2026-05-02"), runtime).unwrap();
-        let parsed = parse_output(&output);
-        let timed = parsed["timedEvents"].as_array().unwrap();
-
-        assert_eq!(parsed["allDayEvents"].as_array().unwrap().len(), 1);
-        assert_eq!(timed.len(), 3);
-        assert_eq!(timed[0]["title"], "Doctor");
-        assert_eq!(timed[1]["title"], "Overlap");
-        assert_eq!(timed[2]["title"], "Pickup");
-        assert!(parsed["messageText"]
-            .as_str()
-            .unwrap()
-            .contains("09:00-09:30 Doctor (Clinic)"));
-    }
-
-    #[test]
-    fn hebrew_and_english_titles_pass_through() {
-        let runtime = MockRuntime {
-            now_millis: MAY_2_2026_UTC_MILLIS,
-            secret_exists: true,
-            family_calendar_id: Some("family-calendar-id".to_string()),
-            events: vec![
-                timed_event(
-                    "רופא ילדים",
-                    "2026-05-02T08:30:00+03:00",
-                    "2026-05-02T09:00:00+03:00",
-                    None,
-                ),
-                timed_event(
-                    "Playdate",
-                    "2026-05-02T16:00:00+03:00",
-                    "2026-05-02T17:00:00+03:00",
-                    None,
-                ),
-            ],
-            error: None,
-        };
-
-        let output = execute_inner(&hebrew_request_json("2026-05-02"), runtime).unwrap();
-        let message = parse_output(&output)["messageText"]
-            .as_str()
-            .unwrap()
-            .to_string();
-
-        assert!(message.contains("רופא ילדים"));
-        assert!(message.contains("Playdate"));
-        assert!(message.contains("תדריך משפחתי"));
-    }
-
-    #[test]
-    fn asia_jerusalem_day_window_uses_local_offset() {
-        let may = compute_day_window("2026-05-02", "Asia/Jerusalem").unwrap();
-        let december = compute_day_window("2026-12-15", "Asia/Jerusalem").unwrap();
-
-        assert!(may.window_start.ends_with("+03:00"));
-        assert!(may.window_end.ends_with("+03:00"));
-        assert!(december.window_start.ends_with("+02:00"));
-        assert!(december.window_end.ends_with("+02:00"));
-    }
-
-    #[test]
-    fn missing_auth_is_reported_without_host_error() {
-        let runtime = MockRuntime {
-            now_millis: MAY_2_2026_UTC_MILLIS,
-            secret_exists: false,
-            family_calendar_id: Some("family-calendar-id".to_string()),
-            events: Vec::new(),
-            error: None,
-        };
-
-        let output = execute_inner(&request_json("2026-05-02"), runtime).unwrap();
-        let parsed = parse_output(&output);
-
-        assert_eq!(parsed["ok"], false);
-        assert_eq!(parsed["error"]["code"], "AUTH_REQUIRED");
-    }
-
-    #[test]
-    fn missing_family_alias_is_reported() {
-        let runtime = MockRuntime {
-            now_millis: MAY_2_2026_UTC_MILLIS,
-            secret_exists: true,
-            family_calendar_id: None,
-            events: Vec::new(),
-            error: None,
-        };
-
-        let output = execute_inner(&request_json("2026-05-02"), runtime).unwrap();
-        let parsed = parse_output(&output);
-
-        assert_eq!(parsed["ok"], false);
-        assert_eq!(parsed["error"]["code"], "CALENDAR_ALIAS_NOT_CONFIGURED");
-    }
-
-    #[test]
-    fn calendar_lookup_errors_are_redacted() {
-        let runtime = MockRuntime {
-            now_millis: MAY_2_2026_UTC_MILLIS,
-            secret_exists: true,
-            family_calendar_id: Some("family-calendar-id".to_string()),
-            events: Vec::new(),
-            error: Some("raw google payload with private id abc123".to_string()),
-        };
-
-        let output = execute_inner(&request_json("2026-05-02"), runtime).unwrap();
-        let parsed = parse_output(&output);
-        let serialized = parsed.to_string();
-
-        assert_eq!(parsed["ok"], false);
-        assert_eq!(parsed["error"]["code"], "CALENDAR_LOOKUP_FAILED");
-        assert!(!serialized.contains("abc123"));
-        assert!(!serialized.contains("raw google payload"));
-    }
-
-    #[test]
-    fn missing_date_defaults_to_local_today_in_jerusalem_and_hebrew() {
-        let runtime = MockRuntime {
-            now_millis: MAY_2_2026_UTC_MILLIS,
-            secret_exists: true,
-            family_calendar_id: Some("family-calendar-id".to_string()),
-            events: Vec::new(),
-            error: None,
-        };
-
-        let output = execute_inner(&request_json_without_date(), runtime).unwrap();
-        let parsed = parse_output(&output);
-
-        assert_eq!(parsed["ok"], true);
-        assert_eq!(parsed["date"], "2026-05-02");
-        assert!(parsed["messageText"]
+        let json = decode_json(&output);
+        assert_eq!(json["ok"], true);
+        assert_eq!(json["recipientIdentity"], "alon");
+        assert_eq!(json["eventCount"], 2);
+        assert!(json["messageText"]
             .as_str()
             .unwrap()
             .contains("תדריך משפחתי"));
+    }
+
+    #[test]
+    fn generate_family_facts_returns_shared_payload_without_message() {
+        let output = execute_inner(
+            r#"{
+                "action":"generate_family_briefing_facts",
+                "date":"2026-05-02",
+                "timezone":"Asia/Jerusalem",
+                "calendarAlias":"family"
+            }"#,
+            base_runtime(),
+        )
+        .unwrap();
+
+        let json = decode_json(&output);
+        assert_eq!(json["ok"], true);
+        assert_eq!(json["action"], "generate_family_briefing_facts");
+        assert_eq!(json["eventCount"], 2);
+        assert!(json.get("messageText").is_none());
+    }
+
+    #[test]
+    fn render_daily_briefing_uses_profile_language_when_language_omitted() {
+        let runtime = MockRuntime {
+            family_registry_json: Some(
+                r#"{
+                    "users":[
+                        {
+                            "canonicalId":"alon",
+                            "displayName":"Alon",
+                            "status":"active",
+                            "preferredLanguage":"en",
+                            "timezone":"Asia/Jerusalem"
+                        }
+                    ]
+                }"#
+                .to_string(),
+            ),
+            ..base_runtime()
+        };
+
+        let output = execute_inner(
+            r#"{
+                "action":"render_daily_briefing",
+                "recipientIdentity":"alon",
+                "facts":{
+                    "calendarAlias":"family",
+                    "timezone":"Asia/Jerusalem",
+                    "date":"2026-05-02",
+                    "windowStart":"2026-05-01T21:00:00+00:00",
+                    "windowEnd":"2026-05-02T21:00:00+00:00",
+                    "allDayEvents":[],
+                    "timedEvents":[
+                        {
+                            "title":"Morning dropoff",
+                            "start":"2026-05-02T08:15:00+03:00",
+                            "end":"2026-05-02T09:05:00+03:00",
+                            "allDay":false
+                        }
+                    ]
+                }
+            }"#,
+            runtime,
+        )
+        .unwrap();
+
+        let json = decode_json(&output);
+        assert_eq!(json["language"], "en");
+        assert!(json["messageText"]
+            .as_str()
+            .unwrap()
+            .contains("Family Briefing"));
+    }
+
+    #[test]
+    fn omitted_date_defaults_from_runtime_clock() {
+        let runtime = MockRuntime {
+            now_millis: 1_777_853_200_000,
+            ..base_runtime()
+        };
+
+        let output = execute_inner(
+            r#"{
+                "action":"generate_family_briefing_facts",
+                "timezone":"Asia/Jerusalem",
+                "calendarAlias":"family"
+            }"#,
+            runtime,
+        )
+        .unwrap();
+
+        let json = decode_json(&output);
+        assert_eq!(json["date"], "2026-05-04");
+    }
+
+    #[test]
+    fn invalid_timezone_returns_error_json() {
+        let output = execute_inner(
+            r#"{
+                "action":"generate_family_briefing_facts",
+                "date":"2026-05-02",
+                "timezone":"Mars/Base",
+                "calendarAlias":"family"
+            }"#,
+            base_runtime(),
+        )
+        .unwrap();
+
+        let json = decode_json(&output);
+        assert_eq!(json["ok"], false);
+        assert_eq!(json["error"]["code"], "INVALID_TIMEZONE");
     }
 }

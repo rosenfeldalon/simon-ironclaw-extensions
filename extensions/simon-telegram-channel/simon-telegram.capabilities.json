@@ -1,9 +1,9 @@
 {
-  "version": "1.12",
+  "version": "1.13",
   "wit_version": "0.3.0",
   "type": "channel",
   "name": "simon_telegram_channel",
-  "description": "Simon Telegram channel based on IronClaw's built-in Telegram channel, with pairing-backed Simon identity admission and outbound safety filtering.",
+  "description": "Simon Telegram channel based on IronClaw's built-in Telegram channel, with pairing-backed canonical family identities and per-recipient routing state.",
   "auth": {
     "secret_name": "simon_telegram_channel_bot_token",
     "display_name": "Simon Telegram",
@@ -57,7 +57,7 @@
       "allowed_names": ["simon_telegram_channel_*"]
     },
     "channel": {
-      "allowed_paths": ["/webhook/simon_telegram_channel"],
+      "allowed_paths": ["/webhook/telegram"],
       "allow_polling": true,
       "min_poll_interval_ms": 30000,
       "workspace_prefix": "channels/simon_telegram_channel/",

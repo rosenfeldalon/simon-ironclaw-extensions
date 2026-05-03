@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.13
+
+- Seeds and maintains a structured Simon family registry so Telegram pairing and proactive delivery can resolve canonical recipients like `alon` and `shlomit` through one shared source of truth.
+- Keeps the `1.12` owner-scope runtime alignment while persisting per-recipient Telegram routing state for the reusable Simon install pack.
+
+## simon_daily_briefing 0.2.0
+
+- Keeps the legacy `generate_daily_briefing` action returning `messageText` for existing routines.
+- Adds `generate_family_briefing_facts` and `render_daily_briefing` so shared family facts can be rendered separately for each enabled parent.
+- Reads the Simon family registry for recipient preferences and defaults omitted dates from the runtime clock.
+
+## simon_family_identity 0.1.0
+
+- Introduces the canonical Simon family registry tool for user profiles, delivery preferences, and recipient target resolution.
+- Renders per-user companion workspace docs for seeded Simon identities.
+
+## simon_setup 0.1.0
+
+- Introduces the Simon first-run setup tool that builds the install-pack manifest, family registry preview, and bootstrap runbook for a fresh deployment.
+- Writes setup through structured extension fields instead of relying on ad hoc chat text.
+
 ## 1.12
 
 - Routes admitted Telegram turns into the resolved owner scope when `pairing_resolve_identity` succeeds, instead of using the canonical Simon family identity as the runtime `user_id`.

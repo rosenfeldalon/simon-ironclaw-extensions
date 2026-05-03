@@ -3,12 +3,16 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist/ironclaw-upload"
-TELEGRAM_BUNDLE_VERSION="${IRONCLAW_SIMON_TELEGRAM_BUNDLE_VERSION:-1.12}"
+TELEGRAM_BUNDLE_VERSION="${IRONCLAW_SIMON_TELEGRAM_BUNDLE_VERSION:-1.13}"
 CALENDAR_BUNDLE_VERSION="${IRONCLAW_SIMON_CALENDAR_BUNDLE_VERSION:-0.2.7}"
-BRIEFING_BUNDLE_VERSION="${IRONCLAW_SIMON_DAILY_BRIEFING_BUNDLE_VERSION:-0.1.2}"
+BRIEFING_BUNDLE_VERSION="${IRONCLAW_SIMON_DAILY_BRIEFING_BUNDLE_VERSION:-0.2.0}"
+FAMILY_IDENTITY_BUNDLE_VERSION="${IRONCLAW_SIMON_FAMILY_IDENTITY_BUNDLE_VERSION:-0.1.0}"
+SETUP_BUNDLE_VERSION="${IRONCLAW_SIMON_SETUP_BUNDLE_VERSION:-0.1.0}"
 TELEGRAM_BUNDLE_DIR="$ROOT_DIR/bundles/simon_telegram_channel"
 CALENDAR_BUNDLE_DIR="$ROOT_DIR/bundles/simon_google_calendar"
 BRIEFING_BUNDLE_DIR="$ROOT_DIR/bundles/simon_daily_briefing"
+FAMILY_IDENTITY_BUNDLE_DIR="$ROOT_DIR/bundles/simon_family_identity"
+SETUP_BUNDLE_DIR="$ROOT_DIR/bundles/simon_setup"
 WORK_DIR="$DIST_DIR/.work"
 
 mkdir -p "$WORK_DIR"
@@ -40,6 +44,8 @@ package_extension() {
 build_crate "extensions/simon-telegram-channel"
 build_crate "extensions/simon-google-calendar-tool"
 build_crate "extensions/simon-daily-briefing"
+build_crate "extensions/simon-family-identity"
+build_crate "extensions/simon-setup"
 
 package_extension \
   "$ROOT_DIR/extensions/simon-telegram-channel/target/wasm32-wasip2/release/simon_telegram_channel.wasm" \
@@ -56,12 +62,29 @@ package_extension \
   "$ROOT_DIR/extensions/simon-daily-briefing/simon-daily-briefing.capabilities.json" \
   "simon_daily_briefing"
 
+package_extension \
+  "$ROOT_DIR/extensions/simon-family-identity/target/wasm32-wasip2/release/simon_family_identity.wasm" \
+  "$ROOT_DIR/extensions/simon-family-identity/simon-family-identity.capabilities.json" \
+  "simon_family_identity"
+
+package_extension \
+  "$ROOT_DIR/extensions/simon-setup/target/wasm32-wasip2/release/simon_setup.wasm" \
+  "$ROOT_DIR/extensions/simon-setup/simon-setup.capabilities.json" \
+  "simon_setup"
+
 rm -rf "$WORK_DIR"
 
-mkdir -p "$TELEGRAM_BUNDLE_DIR" "$CALENDAR_BUNDLE_DIR" "$BRIEFING_BUNDLE_DIR"
+mkdir -p \
+  "$TELEGRAM_BUNDLE_DIR" \
+  "$CALENDAR_BUNDLE_DIR" \
+  "$BRIEFING_BUNDLE_DIR" \
+  "$FAMILY_IDENTITY_BUNDLE_DIR" \
+  "$SETUP_BUNDLE_DIR"
 cp "$DIST_DIR/simon_telegram_channel.tar.gz" "$TELEGRAM_BUNDLE_DIR/$TELEGRAM_BUNDLE_VERSION.tar.gz"
 cp "$DIST_DIR/simon_google_calendar.tar.gz" "$CALENDAR_BUNDLE_DIR/$CALENDAR_BUNDLE_VERSION.tar.gz"
 cp "$DIST_DIR/simon_daily_briefing.tar.gz" "$BRIEFING_BUNDLE_DIR/$BRIEFING_BUNDLE_VERSION.tar.gz"
+cp "$DIST_DIR/simon_family_identity.tar.gz" "$FAMILY_IDENTITY_BUNDLE_DIR/$FAMILY_IDENTITY_BUNDLE_VERSION.tar.gz"
+cp "$DIST_DIR/simon_setup.tar.gz" "$SETUP_BUNDLE_DIR/$SETUP_BUNDLE_VERSION.tar.gz"
 
 echo "Created upload bundles:"
 ls -lh "$DIST_DIR"/*.tar.gz
@@ -69,4 +92,6 @@ echo "Tracked bundle copies:"
 ls -lh \
   "$TELEGRAM_BUNDLE_DIR/$TELEGRAM_BUNDLE_VERSION.tar.gz" \
   "$CALENDAR_BUNDLE_DIR/$CALENDAR_BUNDLE_VERSION.tar.gz" \
-  "$BRIEFING_BUNDLE_DIR/$BRIEFING_BUNDLE_VERSION.tar.gz"
+  "$BRIEFING_BUNDLE_DIR/$BRIEFING_BUNDLE_VERSION.tar.gz" \
+  "$FAMILY_IDENTITY_BUNDLE_DIR/$FAMILY_IDENTITY_BUNDLE_VERSION.tar.gz" \
+  "$SETUP_BUNDLE_DIR/$SETUP_BUNDLE_VERSION.tar.gz"

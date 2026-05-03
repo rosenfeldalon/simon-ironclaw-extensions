@@ -1,0 +1,12 @@
+{
+  "version": "0.1.0",
+  "wit_version": "0.3.0",
+  "type": "tool",
+  "name": "simon_family_identity",
+  "description": "Canonical Simon family identity registry and recipient-routing tool. Reads the shared Simon family registry seeded by simon_telegram_channel and returns canonical users, delivery targets, and per-user workspace seed docs.",
+  "workspace": {
+    "allowed_prefixes": [
+      "channels/simon_telegram_channel/state/"
+    ]
+  }
+}
