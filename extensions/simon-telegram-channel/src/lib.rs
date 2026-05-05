@@ -376,6 +376,12 @@ struct SimonIdentity {
     role: String,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct EmittedIdentityContext {
+    runtime_user_id: String,
+    thread_id: Option<String>,
+}
+
 /// Deserialize a value that may be a JSON string or number into `Option<String>`.
 fn deserialize_string_or_number<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
@@ -2401,6 +2407,61 @@ fn simon_display_name(identity: Option<&SimonIdentity>, fallback: String) -> Str
         .unwrap_or(fallback)
 }
 
+fn emitted_runtime_user_id(
+    resolved_pairing_owner: Option<&str>,
+    owner_id: Option<i64>,
+    is_owner: bool,
+    fallback_sender_id: i64,
+) -> String {
+    if let Some(owner_scope) = resolved_pairing_owner
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return owner_scope.to_string();
+    }
+
+    if is_owner {
+        return owner_id
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| fallback_sender_id.to_string());
+    }
+
+    owner_id
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| fallback_sender_id.to_string())
+}
+
+fn build_emitted_identity_context(
+    is_private: bool,
+    chat_id: i64,
+    fallback_sender_id: i64,
+    resolved_pairing_owner: Option<&str>,
+    owner_id: Option<i64>,
+    is_owner: bool,
+    simon_identity: Option<&SimonIdentity>,
+) -> EmittedIdentityContext {
+    let runtime_user_id = emitted_runtime_user_id(
+        resolved_pairing_owner,
+        owner_id,
+        is_owner,
+        fallback_sender_id,
+    );
+
+    let thread_id = if is_private {
+        let thread_identity = simon_identity
+            .map(|identity| identity.canonical_id.clone())
+            .unwrap_or_else(|| runtime_user_id.clone());
+        Some(format!("telegram-private:{}", thread_identity))
+    } else {
+        Some(chat_id.to_string())
+    };
+
+    EmittedIdentityContext {
+        runtime_user_id,
+        thread_id,
+    }
+}
+
 fn simon_role_display(role: &str) -> &str {
     match role {
         "primary_parent_admin" => "primary parent admin",
@@ -2589,16 +2650,16 @@ fn handle_message(message: TelegramMessage) {
     } else {
         from.first_name.clone()
     };
-    let emitted_user_id = simon_identity
-        .as_ref()
-        .map(|identity| identity.canonical_id.clone())
-        .unwrap_or_else(|| from.id.to_string());
+    let emitted_identity = build_emitted_identity_context(
+        is_private,
+        message.chat.id,
+        from.id,
+        resolved_pairing_owner.as_deref(),
+        owner_id,
+        is_owner,
+        simon_identity.as_ref(),
+    );
     let emitted_user_name = simon_display_name(simon_identity.as_ref(), user_name);
-    let thread_id = if is_private {
-        Some(format!("telegram-private:{}", emitted_user_id))
-    } else {
-        Some(message.chat.id.to_string())
-    };
 
     if is_private {
         if let Some(identity) = simon_identity.as_ref() {
@@ -2645,10 +2706,10 @@ fn handle_message(message: TelegramMessage) {
 
     // Emit the message to the agent
     channel_host::emit_message(&EmittedMessage {
-        user_id: emitted_user_id,
+        user_id: emitted_identity.runtime_user_id,
         user_name: Some(emitted_user_name),
         content: content_with_simon_handoff(&content_to_emit, simon_identity.as_ref()),
-        thread_id,
+        thread_id: emitted_identity.thread_id,
         metadata_json,
         attachments,
     });
@@ -3097,6 +3158,59 @@ mod tests {
     #[test]
     fn test_simon_identity_for_unadmitted_sender_is_none() {
         assert_eq!(simon_identity_for_admitted_sender(None, false, false), None);
+    }
+
+    #[test]
+    fn test_emitted_runtime_user_id_prefers_resolved_pairing_owner() {
+        assert_eq!(
+            emitted_runtime_user_id(Some("owner-scope"), Some(42), false, 999),
+            "owner-scope".to_string()
+        );
+    }
+
+    #[test]
+    fn test_emitted_runtime_user_id_falls_back_to_configured_owner_id() {
+        assert_eq!(
+            emitted_runtime_user_id(None, Some(42), true, 999),
+            "42".to_string()
+        );
+        assert_eq!(
+            emitted_runtime_user_id(None, Some(42), false, 999),
+            "42".to_string()
+        );
+    }
+
+    #[test]
+    fn test_build_emitted_identity_context_keeps_canonical_thread_identity() {
+        let identity = SimonIdentity {
+            canonical_id: "shlomit".to_string(),
+            display_name: "Shlomit".to_string(),
+            role: "second_parent".to_string(),
+        };
+
+        let emitted = build_emitted_identity_context(
+            true,
+            1234,
+            999,
+            Some("owner-scope"),
+            Some(42),
+            false,
+            Some(&identity),
+        );
+
+        assert_eq!(emitted.runtime_user_id, "owner-scope");
+        assert_eq!(
+            emitted.thread_id,
+            Some("telegram-private:shlomit".to_string())
+        );
+    }
+
+    #[test]
+    fn test_build_emitted_identity_context_uses_chat_thread_for_groups() {
+        let emitted = build_emitted_identity_context(false, 1234, 999, None, Some(42), false, None);
+
+        assert_eq!(emitted.runtime_user_id, "42");
+        assert_eq!(emitted.thread_id, Some("1234".to_string()));
     }
 
     #[test]
