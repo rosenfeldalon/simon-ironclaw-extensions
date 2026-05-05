@@ -2,7 +2,7 @@
 
 ## 2026-05-05 Simon calendar write bundle set
 
-- Publishes `simon_telegram_channel` `1.14`, `simon_google_calendar` `0.2.8`, and `simon_daily_briefing` `0.2.1` as one Railway install set.
+- Publishes `simon_telegram_channel` `1.15`, `simon_google_calendar` `0.2.8`, and `simon_daily_briefing` `0.2.1` as one Railway install set.
 - Updates the Telegram handoff bundle so trusted parent turns know Family Calendar create/update/delete actions are available through `simon_google_calendar`.
 - Updates Daily Briefing output to use cleaner Hebrew section text and collapse multiline locations for Telegram.
 
