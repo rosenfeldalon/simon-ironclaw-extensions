@@ -1,9 +1,9 @@
 {
-  "version": "0.1.2",
+  "version": "0.2.1",
   "wit_version": "0.3.0",
   "type": "tool",
   "name": "simon_daily_briefing",
-  "description": "Simon-specific deterministic daily briefing tool. Reads the Family calendar through shared Simon calendar credentials, groups today's events, and returns a Telegram-ready message without write capabilities.",
+  "description": "Simon-specific deterministic daily briefing tool. Generates shared family schedule facts, then renders recipient-specific daily briefing messages without write capabilities.",
   "http": {
     "allowlist": [
       {

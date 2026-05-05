@@ -1,5 +1,5 @@
 {
-  "version": "0.2.7",
+  "version": "0.2.8",
   "wit_version": "0.3.0",
   "type": "tool",
   "name": "simon_google_calendar",

@@ -2,17 +2,17 @@
 
 This is Simon's project-specific IronClaw Google Calendar tool.
 
-It is a custom WASM tool named `simon_google_calendar`. Version `0.2.7` supports the read/write Family calendar slice plus a redacted calendar-list diagnostic while keeping raw Google calendar IDs and event IDs out of model-facing output.
+It is a custom WASM tool named `simon_google_calendar`. Version `0.2.8` supports the read/write Family calendar slice plus a redacted calendar-list diagnostic while keeping raw Google calendar IDs and event IDs out of model-facing output.
 
 ## Current Scope
 
 - Accepts `calendar.events.list`, `calendar.events.find`, `calendar.events.create`, `calendar.events.update`, `calendar.events.delete`, and `calendar.calendars.list`.
-- Accepts only configured calendar aliases; `0.2.7` supports `family`.
+- Accepts only configured calendar aliases; `0.2.8` supports `family`.
 - Requires explicit RFC3339 `timeMin` and `timeMax` bounds.
 - Requires explicit RFC3339 `start` and `end` bounds for creates; updates may patch title, start/end, location, or notes.
 - Derives actor identity from trusted IronClaw job context, not model parameters.
-- Allows `alon` and `local_ironclaw_bot`.
-- Keeps `shlomit` modeled for later onboarding but unauthorized in this slice.
+- Allows trusted parent actors `alon` and `shlomit`, plus trusted admin/runtime actors for diagnostics.
+- Blocks empty or unknown actors before any Google API call.
 - Returns shaped DTOs with opaque `eventRef` values instead of raw Google event IDs.
 - Uses prior opaque `eventRef` values for update/delete.
 - Makes no Google API call for unauthorized actors, invalid windows, unsupported aliases, unsupported actions, invalid event refs, or missing OAuth setup.

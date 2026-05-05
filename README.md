@@ -12,26 +12,30 @@ This repo intentionally contains only distributable extension source, release bu
 
 ## Latest Bundle
 
-The latest public bundle is:
+The latest public bundles are:
 
 ```text
-bundles/simon_telegram_channel/1.12.tar.gz
+bundles/simon_telegram_channel/1.14.tar.gz
+bundles/simon_google_calendar/0.2.8.tar.gz
+bundles/simon_daily_briefing/0.2.1.tar.gz
 ```
 
-After pushing tag `ironclaw-simon-telegram-1.12`, the direct install URL is:
+After pushing tag `ironclaw-simon-calendar-write-2026-05-05`, the direct install URLs are:
 
 ```text
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.12/bundles/simon_telegram_channel/1.12.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-calendar-write-2026-05-05/bundles/simon_telegram_channel/1.14.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-calendar-write-2026-05-05/bundles/simon_google_calendar/0.2.8.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-calendar-write-2026-05-05/bundles/simon_daily_briefing/0.2.1.tar.gz
 ```
 
-Important: `1.12` keeps the `1.11` safety boundary, but fixes the runtime ownership split by emitting admitted Telegram turns into the resolved owner scope while preserving canonical Simon identity in the prompt-visible handoff and private thread namespace. It should log `Simon Telegram channel runtime version 1.12` at startup.
+Important: `1.14` builds on the reusable Simon install-pack channel and updates the verified Telegram handoff so Simon knows `simon_google_calendar` can read, create, update, and delete Family Calendar events for trusted parents.
 
 Install through IronClaw's extension URL installer/API with explicit channel kind:
 
 ```json
 {
   "name": "simon_telegram_channel",
-  "url": "https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-1.12/bundles/simon_telegram_channel/1.12.tar.gz",
+  "url": "https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-calendar-write-2026-05-05/bundles/simon_telegram_channel/1.14.tar.gz",
   "kind": "wasm_channel"
 }
 ```
@@ -43,8 +47,9 @@ Do not use the Settings import flow for this `.tar.gz`; that path is for setting
 ```bash
 rustup target add wasm32-wasip2
 cargo fmt --check && cargo test --manifest-path extensions/simon-telegram-channel/Cargo.toml
-IRONCLAW_SIMON_TELEGRAM_BUNDLE_VERSION=1.12 \
-IRONCLAW_SIMON_CALENDAR_BUNDLE_VERSION=0.2.7 \
+IRONCLAW_SIMON_TELEGRAM_BUNDLE_VERSION=1.14 \
+IRONCLAW_SIMON_CALENDAR_BUNDLE_VERSION=0.2.8 \
+IRONCLAW_SIMON_DAILY_BRIEFING_BUNDLE_VERSION=0.2.1 \
   ./scripts/build-ironclaw-upload-bundles.sh
 ```
 
@@ -70,7 +75,7 @@ For `simon_google_calendar`, keep live Google OAuth Client IDs, Client Secrets, 
 Before sharing an install URL, verify the pushed raw GitHub URL returns `200` and inspect the packaged capabilities JSON for:
 
 - `name: "simon_telegram_channel"`
-- `version: "1.12"`
+- `version: "1.14"`
 - `type: "channel"`
 - `wit_version: "0.3.0"`
 
@@ -78,7 +83,7 @@ Hosted installs must use public URLs from this repo. Do not use raw GitHub URLs 
 
 Raw URL and capabilities checks are necessary release checks, but not success criteria. A release is accepted only after the real hosted Telegram transcript shows durable Simon identity/context and correct calendar tool routing after approval.
 
-`simon_google_calendar` `0.2.7` is the current read/write hosted-install candidate. It fails closed if the `family` alias is not configured at `.system/simon_google_calendar/family_calendar_id`, instead of silently querying Google Calendar `primary`, uses one stable broad private-instance Calendar OAuth scope, and adds a redacted calendar-list diagnostic for alias verification. Its local lab gate is the report from `/Users/alonr/projects/simon-ironclaw-lab`:
+`simon_google_calendar` `0.2.8` is the current read/write hosted-install candidate. It fails closed if the `family` alias is not configured at `.system/simon_google_calendar/family_calendar_id`, instead of silently querying Google Calendar `primary`, allows both trusted parent identities after IronClaw identity resolution, uses one stable broad private-instance Calendar OAuth scope, and adds a redacted calendar-list diagnostic for alias verification. Its local lab gate is the report from `/Users/alonr/projects/simon-ironclaw-lab`:
 
 ```bash
 iclab calendar contract
@@ -86,10 +91,10 @@ iclab calendar contract
 
 Only publish the calendar tool after local fake-contract tests, capabilities inspection, and an explicit non-sensitive OAuth smoke pass.
 
-`simon_daily_briefing` `0.1.2` is the current hosted-install candidate for proactive day-start summaries. It is read-only, uses the same Family calendar alias and OAuth secret names as `simon_google_calendar`, returns a deterministic Telegram-ready `messageText` plus structured event groups, defaults omitted `date` to the current `Asia/Jerusalem` day, and defaults static headings to Hebrew. Hosted install should use a public tag-backed raw URL from this repo, for example:
+`simon_daily_briefing` `0.2.1` is the current hosted-install candidate for proactive day-start summaries. It is read-only, uses the same Family calendar alias and OAuth secret names as `simon_google_calendar`, returns a deterministic Telegram-ready `messageText` plus structured event groups, defaults omitted `date` to the current `Asia/Jerusalem` day, defaults static headings to Hebrew, and collapses multiline locations for cleaner Telegram output. Hosted install should use a public tag-backed raw URL from this repo, for example:
 
 ```text
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-daily-briefing-0.1.2/bundles/simon_daily_briefing/0.1.2.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-calendar-write-2026-05-05/bundles/simon_daily_briefing/0.2.1.tar.gz
 ```
 
 ## Diagnostic Context

@@ -955,25 +955,42 @@ fn actor_from_context(context: Option<&JobContext>) -> Option<String> {
     {
         return Some(requester_id.to_string());
     }
-    if context.user_id.as_deref() == Some("local_ironclaw_bot") {
-        return Some("local_ironclaw_bot".to_string());
-    }
-    let metadata = context.metadata.as_ref()?.as_object()?;
-    for key in ["simon_identity", "canonical_id", "actor"] {
-        if let Some(value) = metadata.get(key).and_then(Value::as_str) {
-            if !value.is_empty() {
-                return Some(value.to_string());
+    if let Some(metadata) = context.metadata.as_ref().and_then(Value::as_object) {
+        for key in ["simon_identity", "canonical_id", "actor"] {
+            if let Some(value) = metadata.get(key).and_then(Value::as_str) {
+                if !value.is_empty() {
+                    return Some(value.to_string());
+                }
             }
+        }
+    }
+    if let Some(user_id) = context.user_id.as_deref().filter(|value| !value.is_empty()) {
+        if is_trusted_runtime_actor(user_id) {
+            return Some(user_id.to_string());
         }
     }
     None
 }
 
 fn is_allowed_actor(actor: Option<&str>) -> bool {
-    actor
-        .map(str::trim)
-        .map(|actor| !actor.is_empty() && actor != "shlomit")
-        .unwrap_or(true)
+    actor.map(str::trim).is_some_and(|actor| {
+        matches!(
+            actor,
+            "alon"
+                | "shlomit"
+                | "local_ironclaw_bot"
+                | "default"
+                | "gateway-owner"
+                | "trusted_ironclaw_gateway"
+        )
+    })
+}
+
+fn is_trusted_runtime_actor(actor: &str) -> bool {
+    matches!(
+        actor,
+        "local_ironclaw_bot" | "default" | "gateway-owner" | "trusted_ironclaw_gateway"
+    )
 }
 
 fn valid_time_window(time_min: &str, time_max: &str) -> bool {
@@ -1253,16 +1270,42 @@ mod tests {
     }
 
     #[test]
-    fn shlomit_is_not_allowed_in_v1() {
-        assert!(!is_allowed_actor(Some("shlomit")));
+    fn parent_identities_are_allowed_after_trusted_resolution() {
+        assert!(is_allowed_actor(Some("alon")));
+        assert!(is_allowed_actor(Some("shlomit")));
     }
 
     #[test]
     fn trusted_gateway_owner_context_is_allowed() {
         assert!(is_allowed_actor(Some("default")));
         assert!(is_allowed_actor(Some("gateway-owner")));
-        assert!(is_allowed_actor(None));
+        assert!(is_allowed_actor(Some("local_ironclaw_bot")));
+        assert!(!is_allowed_actor(Some("unknown-parent")));
+        assert!(!is_allowed_actor(None));
         assert!(!is_allowed_actor(Some("")));
+    }
+
+    #[test]
+    fn actor_uses_trusted_gateway_user_id_when_metadata_absent() {
+        let context = JobContext {
+            user_id: Some("default".to_string()),
+            requester_id: None,
+            metadata: None,
+        };
+        assert_eq!(
+            actor_from_context(Some(&context)).as_deref(),
+            Some("default")
+        );
+    }
+
+    #[test]
+    fn actor_blocks_unknown_user_id_without_verified_metadata() {
+        let context = JobContext {
+            user_id: Some("unknown-parent".to_string()),
+            requester_id: None,
+            metadata: None,
+        };
+        assert_eq!(actor_from_context(Some(&context)), None);
     }
 
     #[test]

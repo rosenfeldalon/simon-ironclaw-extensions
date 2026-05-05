@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-05-05 Simon calendar write bundle set
+
+- Publishes `simon_telegram_channel` `1.14`, `simon_google_calendar` `0.2.8`, and `simon_daily_briefing` `0.2.1` as one Railway install set.
+- Updates the Telegram handoff bundle so trusted parent turns know Family Calendar create/update/delete actions are available through `simon_google_calendar`.
+- Updates Daily Briefing output to use cleaner Hebrew section text and collapse multiline locations for Telegram.
+
+## simon_google_calendar 0.2.8
+
+- Allows both trusted parent identities, `alon` and `shlomit`, to read, create, update, and delete Family Calendar events after IronClaw resolves identity.
+- Fails closed for empty or unknown actors before any Google Calendar API call, while preserving trusted admin/runtime actors for diagnostics.
+
 ## 1.12
 
 - Routes admitted Telegram turns into the resolved owner scope when `pairing_resolve_identity` succeeds, instead of using the canonical Simon family identity as the runtime `user_id`.
