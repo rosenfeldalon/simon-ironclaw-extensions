@@ -10,32 +10,40 @@ This repo intentionally contains only distributable extension source, release bu
 - `extensions/simon-google-calendar-tool/`: Simon-specific Google Calendar read/write tool package named `simon_google_calendar`.
 - `extensions/simon-daily-briefing/`: deterministic Family daily briefing tool package named `simon_daily_briefing`.
 
-## Latest Bundle
+## Latest Bundles
 
 The latest public bundles are:
 
 ```text
-bundles/simon_telegram_channel/1.14.tar.gz
+bundles/simon_telegram_channel/1.16.tar.gz
 bundles/simon_google_calendar/0.2.8.tar.gz
 bundles/simon_daily_briefing/0.2.1.tar.gz
+bundles/simon_family_identity/0.1.0.tar.gz
+bundles/simon_setup/0.1.0.tar.gz
 ```
 
-After pushing tag `ironclaw-simon-calendar-write-2026-05-05`, the direct install URLs are:
+After pushing tag `ironclaw-simon-telegram-durable-workspace-2026-05-06`, the direct install URLs are:
 
 ```text
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-calendar-write-2026-05-05/bundles/simon_telegram_channel/1.14.tar.gz
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-calendar-write-2026-05-05/bundles/simon_google_calendar/0.2.8.tar.gz
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-calendar-write-2026-05-05/bundles/simon_daily_briefing/0.2.1.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-durable-workspace-2026-05-06/bundles/simon_telegram_channel/1.16.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-durable-workspace-2026-05-06/bundles/simon_google_calendar/0.2.8.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-durable-workspace-2026-05-06/bundles/simon_daily_briefing/0.2.1.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-durable-workspace-2026-05-06/bundles/simon_family_identity/0.1.0.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-durable-workspace-2026-05-06/bundles/simon_setup/0.1.0.tar.gz
 ```
 
-Important: `1.14` builds on the reusable Simon install-pack channel and updates the verified Telegram handoff so Simon knows `simon_google_calendar` can read, create, update, and delete Family Calendar events for trusted parents.
+Important: `1.16` builds on the reusable Simon install-pack channel, keeps the owner-scope routing fix from `1.15`, and adds restart-durable persistence for:
+
+- `state/simon_family_profiles.json`
+- `state/simon_telegram_chat_id__alon`
+- `state/simon_telegram_chat_id__shlomit`
 
 Install through IronClaw's extension URL installer/API with explicit channel kind:
 
 ```json
 {
   "name": "simon_telegram_channel",
-  "url": "https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-calendar-write-2026-05-05/bundles/simon_telegram_channel/1.14.tar.gz",
+  "url": "https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-durable-workspace-2026-05-06/bundles/simon_telegram_channel/1.16.tar.gz",
   "kind": "wasm_channel"
 }
 ```
@@ -47,7 +55,7 @@ Do not use the Settings import flow for this `.tar.gz`; that path is for setting
 ```bash
 rustup target add wasm32-wasip2
 cargo fmt --check && cargo test --manifest-path extensions/simon-telegram-channel/Cargo.toml
-IRONCLAW_SIMON_TELEGRAM_BUNDLE_VERSION=1.14 \
+IRONCLAW_SIMON_TELEGRAM_BUNDLE_VERSION=1.16 \
 IRONCLAW_SIMON_CALENDAR_BUNDLE_VERSION=0.2.8 \
 IRONCLAW_SIMON_DAILY_BRIEFING_BUNDLE_VERSION=0.2.1 \
   ./scripts/build-ironclaw-upload-bundles.sh
@@ -75,7 +83,7 @@ For `simon_google_calendar`, keep live Google OAuth Client IDs, Client Secrets, 
 Before sharing an install URL, verify the pushed raw GitHub URL returns `200` and inspect the packaged capabilities JSON for:
 
 - `name: "simon_telegram_channel"`
-- `version: "1.14"`
+- `version: "1.16"`
 - `type: "channel"`
 - `wit_version: "0.3.0"`
 
@@ -94,7 +102,7 @@ Only publish the calendar tool after local fake-contract tests, capabilities ins
 `simon_daily_briefing` `0.2.1` is the current hosted-install candidate for proactive day-start summaries. It is read-only, uses the same Family calendar alias and OAuth secret names as `simon_google_calendar`, returns a deterministic Telegram-ready `messageText` plus structured event groups, defaults omitted `date` to the current `Asia/Jerusalem` day, defaults static headings to Hebrew, and collapses multiline locations for cleaner Telegram output. Hosted install should use a public tag-backed raw URL from this repo, for example:
 
 ```text
-https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-calendar-write-2026-05-05/bundles/simon_daily_briefing/0.2.1.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-durable-workspace-2026-05-06/bundles/simon_daily_briefing/0.2.1.tar.gz
 ```
 
 ## Diagnostic Context

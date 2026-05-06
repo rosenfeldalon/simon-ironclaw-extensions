@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-05-06 Simon Telegram durable workspace release
+
+- Publishes `simon_telegram_channel` `1.16` with restart-durable workspace persistence for the shared family registry and canonical per-user Telegram chat-id bindings.
+- Keeps the May 5 owner-scope routing fix in place while closing the deploy-loop gap where Telegram turns could succeed live but `simon_family_identity` and deploy validation fell back to defaults after restart.
+- Keeps the Railway install-pack bundle set aligned on `simon_google_calendar` `0.2.8`, `simon_daily_briefing` `0.2.1`, `simon_family_identity` `0.1.0`, and `simon_setup` `0.1.0`.
+
 ## 2026-05-05 Simon calendar write bundle set
 
 - Publishes `simon_telegram_channel` `1.15`, `simon_google_calendar` `0.2.8`, and `simon_daily_briefing` `0.2.1` as one Railway install set.

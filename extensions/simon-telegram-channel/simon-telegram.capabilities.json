@@ -1,5 +1,5 @@
 {
-  "version": "1.15",
+  "version": "1.16",
   "wit_version": "0.3.0",
   "type": "channel",
   "name": "simon_telegram_channel",
@@ -61,6 +61,11 @@
       "allow_polling": true,
       "min_poll_interval_ms": 30000,
       "workspace_prefix": "channels/simon_telegram_channel/",
+      "durable_workspace_paths": [
+        "state/simon_family_profiles.json",
+        "state/simon_telegram_chat_id__alon",
+        "state/simon_telegram_chat_id__shlomit"
+      ],
       "emit_rate_limit": {
         "messages_per_minute": 100,
         "messages_per_hour": 5000
