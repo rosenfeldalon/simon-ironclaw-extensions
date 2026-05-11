@@ -52,8 +52,21 @@ struct TelegramUpdate {
     /// Edited message.
     edited_message: Option<TelegramMessage>,
 
+    /// Inline keyboard button press.
+    callback_query: Option<TelegramCallbackQuery>,
+
     /// Channel post (we ignore these for now).
     channel_post: Option<TelegramMessage>,
+}
+
+/// Telegram CallbackQuery object.
+/// https://core.telegram.org/bots/api#callbackquery
+#[derive(Debug, Deserialize)]
+struct TelegramCallbackQuery {
+    id: String,
+    from: TelegramUser,
+    message: Option<TelegramMessage>,
+    data: Option<String>,
 }
 
 /// Telegram Message object.
@@ -328,6 +341,14 @@ struct TelegramMessageMetadata {
     /// True only when the sender matched trusted runtime Telegram metadata.
     #[serde(default)]
     identity_verified: bool,
+
+    /// Callback query ID when this turn originated from an inline keyboard press.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    callback_query_id: Option<String>,
+
+    /// Callback data when this turn originated from an inline keyboard press.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    callback_data: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -380,6 +401,13 @@ struct SimonIdentity {
 struct EmittedIdentityContext {
     runtime_user_id: String,
     thread_id: Option<String>,
+}
+
+struct AdmittedTelegramSender {
+    owner_id: Option<i64>,
+    is_owner: bool,
+    resolved_pairing_owner: Option<String>,
+    simon_identity: Option<SimonIdentity>,
 }
 
 /// Deserialize a value that may be a JSON string or number into `Option<String>`.
@@ -598,10 +626,14 @@ fn status_message_for_user(update: &StatusUpdate) -> Option<String> {
     }
 }
 
+const TELEGRAM_ALLOWED_UPDATES: &str = "[\"message\",\"edited_message\",\"callback_query\"]";
+const TELEGRAM_REPLY_MARKUP_OPEN: &str = "<telegram_reply_markup>";
+const TELEGRAM_REPLY_MARKUP_CLOSE: &str = "</telegram_reply_markup>";
+
 fn get_updates_url(offset: i64, timeout_secs: u32) -> String {
     format!(
-        "https://api.telegram.org/bot{{SIMON_TELEGRAM_CHANNEL_BOT_TOKEN}}/getUpdates?offset={}&timeout={}&allowed_updates=[\"message\",\"edited_message\"]",
-        offset, timeout_secs
+        "https://api.telegram.org/bot{{SIMON_TELEGRAM_CHANNEL_BOT_TOKEN}}/getUpdates?offset={}&timeout={}&allowed_updates={}",
+        offset, timeout_secs, TELEGRAM_ALLOWED_UPDATES
     )
 }
 
@@ -1019,6 +1051,7 @@ impl Guest for TelegramChannel {
                     Some(metadata.message_id),
                     None,
                     metadata.message_thread_id,
+                    None,
                 ) {
                     channel_host::log(
                         channel_host::LogLevel::Warn,
@@ -1034,6 +1067,7 @@ impl Guest for TelegramChannel {
                         None,
                         None,
                         metadata.message_thread_id,
+                        None,
                     ) {
                         channel_host::log(
                             channel_host::LogLevel::Debug,
@@ -1101,6 +1135,7 @@ fn send_message(
     reply_to_message_id: Option<i64>,
     parse_mode: Option<&str>,
     message_thread_id: Option<i64>,
+    reply_markup: Option<&serde_json::Value>,
 ) -> Result<i64, SendError> {
     let message_thread_id = normalize_thread_id(message_thread_id);
 
@@ -1119,6 +1154,10 @@ fn send_message(
 
     if let Some(thread_id) = message_thread_id {
         payload["message_thread_id"] = serde_json::Value::Number(thread_id.into());
+    }
+
+    if let Some(markup) = reply_markup {
+        payload["reply_markup"] = markup.clone();
     }
 
     let payload_bytes = serde_json::to_vec(&payload)
@@ -1537,21 +1576,108 @@ fn send_response(
         return Ok(());
     }
 
+    let (content, reply_markup) = extract_telegram_reply_markup(&response.content);
+
     // Split large messages into chunks that fit Telegram's limit.
-    let chunks = split_message(&response.content, TELEGRAM_MAX_MESSAGE_LEN);
+    let chunks = split_message(&content, TELEGRAM_MAX_MESSAGE_LEN);
 
     // The first chunk replies to the original message; subsequent chunks
     // reply to the previously sent chunk so they form a visual thread.
     let mut reply_to = reply_to_message_id;
 
-    for chunk in &chunks {
-        let msg_id = send_chunk(chat_id, chunk, reply_to, message_thread_id)?;
+    for (index, chunk) in chunks.iter().enumerate() {
+        let chunk_reply_markup = if index + 1 == chunks.len() {
+            reply_markup.as_ref()
+        } else {
+            None
+        };
+        let msg_id = send_chunk(
+            chat_id,
+            chunk,
+            reply_to,
+            message_thread_id,
+            chunk_reply_markup,
+        )?;
 
         // Each subsequent chunk threads off the previous sent message.
         reply_to = Some(msg_id);
     }
 
     Ok(())
+}
+
+fn extract_telegram_reply_markup(content: &str) -> (String, Option<serde_json::Value>) {
+    let Some(close_start) = content.rfind(TELEGRAM_REPLY_MARKUP_CLOSE) else {
+        return (content.to_string(), None);
+    };
+
+    if !content[close_start + TELEGRAM_REPLY_MARKUP_CLOSE.len()..]
+        .trim()
+        .is_empty()
+    {
+        return (content.to_string(), None);
+    }
+
+    let Some(open_start) = content[..close_start].rfind(TELEGRAM_REPLY_MARKUP_OPEN) else {
+        return (content.to_string(), None);
+    };
+
+    let json_start = open_start + TELEGRAM_REPLY_MARKUP_OPEN.len();
+    let markup_raw = content[json_start..close_start].trim();
+    let visible = content[..open_start].trim_end().to_string();
+
+    match serde_json::from_str::<serde_json::Value>(markup_raw)
+        .ok()
+        .and_then(validated_inline_keyboard_markup)
+    {
+        Some(markup) => (visible, Some(markup)),
+        None => {
+            log_warn("Ignoring invalid Telegram inline keyboard reply_markup block");
+            (visible, None)
+        }
+    }
+}
+
+fn log_warn(message: &str) {
+    #[cfg(target_arch = "wasm32")]
+    channel_host::log(channel_host::LogLevel::Warn, message);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = message;
+}
+
+fn validated_inline_keyboard_markup(markup: serde_json::Value) -> Option<serde_json::Value> {
+    let rows = markup.get("inline_keyboard")?.as_array()?;
+    if rows.is_empty() {
+        return None;
+    }
+
+    for row in rows {
+        let buttons = row.as_array()?;
+        if buttons.is_empty() {
+            return None;
+        }
+
+        for button in buttons {
+            let obj = button.as_object()?;
+            let text = obj.get("text")?.as_str()?.trim();
+            let callback_data = obj.get("callback_data")?.as_str()?;
+            let callback_len = callback_data.as_bytes().len();
+
+            if text.is_empty() || callback_len == 0 || callback_len > 64 {
+                return None;
+            }
+
+            if obj
+                .keys()
+                .any(|key| key != "text" && key != "callback_data")
+            {
+                return None;
+            }
+        }
+    }
+
+    Some(markup)
 }
 
 /// Maximum recursion depth for splitting too-long messages. Each level
@@ -1570,12 +1696,14 @@ fn send_chunk(
     text: &str,
     reply_to: Option<i64>,
     message_thread_id: Option<i64>,
+    reply_markup: Option<&serde_json::Value>,
 ) -> Result<i64, String> {
     send_chunk_inner(
         chat_id,
         text,
         reply_to,
         message_thread_id,
+        reply_markup,
         TELEGRAM_MAX_MESSAGE_LEN,
         0,
         true,
@@ -1587,12 +1715,20 @@ fn send_chunk_inner(
     text: &str,
     reply_to: Option<i64>,
     message_thread_id: Option<i64>,
+    reply_markup: Option<&serde_json::Value>,
     limit_utf16: usize,
     depth: u8,
     use_markdown: bool,
 ) -> Result<i64, String> {
     let parse_mode = if use_markdown { Some("Markdown") } else { None };
-    let result = send_message(chat_id, text, reply_to, parse_mode, message_thread_id);
+    let result = send_message(
+        chat_id,
+        text,
+        reply_to,
+        parse_mode,
+        message_thread_id,
+        reply_markup,
+    );
 
     match result {
         Ok(id) => {
@@ -1617,6 +1753,7 @@ fn send_chunk_inner(
                 text,
                 reply_to,
                 message_thread_id,
+                reply_markup,
                 limit_utf16,
                 depth,
                 false,
@@ -1627,6 +1764,7 @@ fn send_chunk_inner(
             text,
             reply_to,
             message_thread_id,
+            reply_markup,
             limit_utf16,
             depth,
             use_markdown,
@@ -1649,6 +1787,7 @@ fn resplit_and_send(
     text: &str,
     reply_to: Option<i64>,
     message_thread_id: Option<i64>,
+    reply_markup: Option<&serde_json::Value>,
     limit_utf16: usize,
     depth: u8,
     use_markdown: bool,
@@ -1679,12 +1818,18 @@ fn resplit_and_send(
 
     let mut reply = reply_to;
     let mut last_id = None;
-    for sub in &sub_chunks {
+    for (index, sub) in sub_chunks.iter().enumerate() {
+        let sub_reply_markup = if index + 1 == sub_chunks.len() {
+            reply_markup
+        } else {
+            None
+        };
         let id = send_chunk_inner(
             chat_id,
             sub,
             reply,
             message_thread_id,
+            sub_reply_markup,
             new_limit,
             depth + 1,
             use_markdown,
@@ -1817,7 +1962,7 @@ fn register_webhook(tunnel_url: &str, webhook_secret: Option<&str>) -> Result<()
     // Build setWebhook request body
     let mut body = serde_json::json!({
         "url": webhook_url,
-        "allowed_updates": ["message", "edited_message"]
+        "allowed_updates": ["message", "edited_message", "callback_query"]
     });
 
     if let Some(secret) = webhook_secret {
@@ -1916,9 +2061,50 @@ fn send_pairing_reply(chat_id: i64, code: &str) -> Result<(), String> {
         None,
         Some("Markdown"),
         None,
+        None,
     )
     .map(|_| ())
     .map_err(|e| e.to_string())
+}
+
+fn answer_callback_query(callback_query_id: &str) {
+    let payload = serde_json::json!({
+        "callback_query_id": callback_query_id,
+    });
+
+    let payload_bytes = match serde_json::to_vec(&payload) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            channel_host::log(
+                channel_host::LogLevel::Warn,
+                &format!("Failed to serialize answerCallbackQuery payload: {}", err),
+            );
+            return;
+        }
+    };
+
+    let headers = serde_json::json!({ "Content-Type": "application/json" });
+    match channel_host::http_request(
+        "POST",
+        "https://api.telegram.org/bot{SIMON_TELEGRAM_CHANNEL_BOT_TOKEN}/answerCallbackQuery",
+        &headers.to_string(),
+        Some(&payload_bytes),
+        None,
+    ) {
+        Ok(response) if response.status == 200 => {}
+        Ok(response) => {
+            channel_host::log(
+                channel_host::LogLevel::Warn,
+                &format!("answerCallbackQuery returned status {}", response.status),
+            );
+        }
+        Err(err) => {
+            channel_host::log(
+                channel_host::LogLevel::Warn,
+                &format!("answerCallbackQuery request failed: {}", err),
+            );
+        }
+    }
 }
 
 // ============================================================================
@@ -1927,6 +2113,11 @@ fn send_pairing_reply(chat_id: i64, code: &str) -> Result<(), String> {
 
 /// Process a Telegram update and emit messages if applicable.
 fn handle_update(update: TelegramUpdate) {
+    if let Some(callback_query) = update.callback_query {
+        handle_callback_query(callback_query);
+        return;
+    }
+
     // Handle regular messages
     if let Some(message) = update.message {
         handle_message(message);
@@ -1936,6 +2127,90 @@ fn handle_update(update: TelegramUpdate) {
     if let Some(message) = update.edited_message {
         handle_message(message);
     }
+}
+
+fn handle_callback_query(callback_query: TelegramCallbackQuery) {
+    answer_callback_query(&callback_query.id);
+
+    let data = match callback_query.data {
+        Some(data) if !data.trim().is_empty() => data,
+        _ => return,
+    };
+
+    if data.as_bytes().len() > 64 {
+        channel_host::log(
+            channel_host::LogLevel::Warn,
+            "Dropping Telegram callback query with oversized callback_data",
+        );
+        return;
+    }
+
+    if callback_query.from.is_bot {
+        return;
+    }
+
+    let message = match callback_query.message {
+        Some(message) => message,
+        None => return,
+    };
+
+    let admitted_sender = admitted_sender_for_user(&callback_query.from);
+    let Some(ref simon_identity) = admitted_sender.simon_identity else {
+        channel_host::log(
+            channel_host::LogLevel::Debug,
+            "Dropping Telegram callback query from unpaired sender",
+        );
+        return;
+    };
+
+    let is_private = message.chat.chat_type == "private";
+    let emitted_identity = build_emitted_identity_context(
+        is_private,
+        message.chat.id,
+        callback_query.from.id,
+        admitted_sender.resolved_pairing_owner.as_deref(),
+        admitted_sender.owner_id,
+        admitted_sender.is_owner,
+        Some(simon_identity),
+    );
+
+    if is_private {
+        if let Some(path) = simon_chat_id_path_for_identity(&simon_identity.canonical_id) {
+            let _ = channel_host::workspace_write(&path, &message.chat.id.to_string());
+            update_family_registry_binding(simon_identity, message.chat.id);
+        }
+    }
+
+    let user_name = if let Some(ref last) = callback_query.from.last_name {
+        format!("{} {}", callback_query.from.first_name, last)
+    } else {
+        callback_query.from.first_name.clone()
+    };
+
+    let metadata = TelegramMessageMetadata {
+        chat_id: message.chat.id,
+        message_id: message.message_id,
+        user_id: callback_query.from.id,
+        is_private,
+        chat_type: Some(message.chat.chat_type.clone()),
+        message_thread_id: message.message_thread_id,
+        simon_identity: Some(simon_identity.canonical_id.clone()),
+        simon_role: Some(simon_identity.role.clone()),
+        identity_verified: true,
+        callback_query_id: Some(callback_query.id),
+        callback_data: Some(data.clone()),
+    };
+    let metadata_json = serde_json::to_string(&metadata).unwrap_or_else(|_| "{}".to_string());
+    let content = format!("Telegram inline button selected: {}", data);
+
+    channel_host::emit_message(&EmittedMessage {
+        user_id: emitted_identity.runtime_user_id,
+        user_name: Some(simon_display_name(Some(simon_identity), user_name)),
+        content: content_with_simon_handoff(&content, Some(simon_identity)),
+        thread_id: emitted_identity.thread_id,
+        metadata_json,
+        attachments: Vec::new(),
+    });
 }
 
 /// Build extras-json with optional duration.
@@ -2519,6 +2794,29 @@ fn resolved_pairing_owner_for_sender(sender_id: &str) -> Option<String> {
     }
 }
 
+fn admitted_sender_for_user(from: &TelegramUser) -> AdmittedTelegramSender {
+    let id_str = from.id.to_string();
+    let username_opt = from.username.as_deref();
+    let owner_id = channel_host::workspace_read(OWNER_ID_PATH)
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.parse::<i64>().ok());
+    let is_owner = owner_id == Some(from.id);
+    let resolved_pairing_owner = resolved_pairing_owner_for_sender(&id_str);
+    let is_allowed_sender = pairing_store_allows_sender(&id_str, username_opt);
+    let simon_identity = simon_identity_for_admitted_sender(
+        resolved_pairing_owner.as_deref(),
+        is_owner,
+        is_allowed_sender,
+    );
+
+    AdmittedTelegramSender {
+        owner_id,
+        is_owner,
+        resolved_pairing_owner,
+        simon_identity,
+    }
+}
+
 /// Process a single message.
 fn handle_message(message: TelegramMessage) {
     // Extract attachments from media fields (pure data mapping, no host calls)
@@ -2566,17 +2864,11 @@ fn handle_message(message: TelegramMessage) {
     let is_private = message.chat.chat_type == "private";
     let id_str = from.id.to_string();
     let username_opt = from.username.as_deref();
-    let owner_id = channel_host::workspace_read(OWNER_ID_PATH)
-        .filter(|s| !s.is_empty())
-        .and_then(|s| s.parse::<i64>().ok());
-    let is_owner = owner_id == Some(from.id);
-    let resolved_pairing_owner = resolved_pairing_owner_for_sender(&id_str);
-    let is_allowed_sender = pairing_store_allows_sender(&id_str, username_opt);
-    let simon_identity = simon_identity_for_admitted_sender(
-        resolved_pairing_owner.as_deref(),
-        is_owner,
-        is_allowed_sender,
-    );
+    let admitted_sender = admitted_sender_for_user(&from);
+    let owner_id = admitted_sender.owner_id;
+    let is_owner = admitted_sender.is_owner;
+    let resolved_pairing_owner = admitted_sender.resolved_pairing_owner;
+    let simon_identity = admitted_sender.simon_identity;
 
     if simon_identity.is_none() {
         if is_private {
@@ -2685,6 +2977,8 @@ fn handle_message(message: TelegramMessage) {
             .as_ref()
             .map(|identity| identity.role.clone()),
         identity_verified: simon_identity.is_some(),
+        callback_query_id: None,
+        callback_data: None,
     };
 
     let metadata_json = serde_json::to_string(&metadata).unwrap_or_else(|_| "{}".to_string());
@@ -3293,7 +3587,89 @@ mod tests {
         let url = get_updates_url(444_809_884, 30);
         assert!(url.contains("offset=444809884"));
         assert!(url.contains("timeout=30"));
-        assert!(url.contains("allowed_updates=[\"message\",\"edited_message\"]"));
+        assert!(url.contains("allowed_updates=[\"message\",\"edited_message\",\"callback_query\"]"));
+    }
+
+    #[test]
+    fn test_extract_telegram_reply_markup_inline_keyboard() {
+        let content = concat!(
+            "Who picks up Dori today?\n",
+            "<telegram_reply_markup>",
+            r#"{"inline_keyboard":[[{"text":"Me","callback_data":"pickup_me"}],[{"text":"Nobody","callback_data":"pickup_none"}]]}"#,
+            "</telegram_reply_markup>"
+        );
+
+        let (text, markup) = extract_telegram_reply_markup(content);
+        let markup = markup.expect("expected inline keyboard markup");
+
+        assert_eq!(text, "Who picks up Dori today?");
+        assert_eq!(markup["inline_keyboard"][0][0]["text"], "Me");
+        assert_eq!(
+            markup["inline_keyboard"][1][0]["callback_data"],
+            "pickup_none"
+        );
+    }
+
+    #[test]
+    fn test_extract_telegram_reply_markup_rejects_non_callback_button() {
+        let content = concat!(
+            "Pick one\n",
+            "<telegram_reply_markup>",
+            r#"{"inline_keyboard":[[{"text":"Open","url":"https://example.com"}]]}"#,
+            "</telegram_reply_markup>"
+        );
+
+        let (text, markup) = extract_telegram_reply_markup(content);
+
+        assert_eq!(text, "Pick one");
+        assert!(markup.is_none());
+    }
+
+    #[test]
+    fn test_extract_telegram_reply_markup_only_at_end() {
+        let content = concat!(
+            "Pick one\n",
+            "<telegram_reply_markup>",
+            r#"{"inline_keyboard":[[{"text":"Me","callback_data":"pickup_me"}]]}"#,
+            "</telegram_reply_markup>\nextra"
+        );
+
+        let (text, markup) = extract_telegram_reply_markup(content);
+
+        assert_eq!(text, content);
+        assert!(markup.is_none());
+    }
+
+    #[test]
+    fn test_parse_update_with_callback_query() {
+        let json = r#"{
+            "update_id": 124,
+            "callback_query": {
+                "id": "callback-1",
+                "from": {
+                    "id": 789,
+                    "is_bot": false,
+                    "first_name": "John"
+                },
+                "message": {
+                    "message_id": 456,
+                    "chat": {
+                        "id": 789,
+                        "type": "private"
+                    },
+                    "text": "Who picks up Dori today?"
+                },
+                "data": "pickup_me"
+            }
+        }"#;
+
+        let update: TelegramUpdate = serde_json::from_str(json).unwrap();
+        let callback = update.callback_query.expect("expected callback query");
+
+        assert_eq!(callback.id, "callback-1");
+        assert_eq!(callback.from.id, 789);
+        assert_eq!(callback.data.as_deref(), Some("pickup_me"));
+        assert_eq!(callback.message.unwrap().message_id, 456);
     }
 
     #[test]
@@ -3469,6 +3845,8 @@ mod tests {
             simon_identity: Some("alon".to_string()),
             simon_role: Some("primary_parent_admin".to_string()),
             identity_verified: true,
+            callback_query_id: None,
+            callback_data: None,
         };
 
         let value = serde_json::to_value(&metadata).unwrap();

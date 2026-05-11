@@ -1,9 +1,9 @@
 {
-  "version": "1.16",
+  "version": "1.17",
   "wit_version": "0.3.0",
   "type": "channel",
   "name": "simon_telegram_channel",
-  "description": "Simon Telegram channel based on IronClaw's built-in Telegram channel, with pairing-backed canonical family identities and per-recipient routing state.",
+  "description": "Simon Telegram channel based on IronClaw's built-in Telegram channel, with pairing-backed canonical family identities, per-recipient routing state, and inline keyboard callback support.",
   "auth": {
     "secret_name": "simon_telegram_channel_bot_token",
     "display_name": "Simon Telegram",

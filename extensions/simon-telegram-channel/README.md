@@ -2,7 +2,7 @@
 
 This is the intended IronClaw-native wrapper for Simon's Telegram path.
 
-It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1` clone proved that the package installs and activates as `CHANNEL` when installed with explicit `kind: "wasm_channel"`. The current `1.16` layer keeps built-in-style owner and pairing admission, persists canonical Simon family identities and per-recipient Telegram routing state for the install pack, and tells verified Telegram turns about the active Family Calendar read/write contract.
+It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1` clone proved that the package installs and activates as `CHANNEL` when installed with explicit `kind: "wasm_channel"`. The current `1.17` layer keeps built-in-style owner and pairing admission, persists canonical Simon family identities and per-recipient Telegram routing state for the install pack, tells verified Telegram turns about the active Family Calendar read/write contract, and supports inline keyboard callback conversations.
 
 ## Current Scope
 
@@ -17,6 +17,8 @@ It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1`
 - Resolves paired Telegram senders to canonical Simon identities where the pairing owner matches a canonical family user.
 - Persists per-identity Telegram chat bindings instead of one Alon-only chat slot.
 - Prepends a plain-text Simon Telegram verified-sender context to admitted messages so the agent sees the canonical sender identity.
+- Sends Telegram `reply_markup.inline_keyboard` when the assistant response ends with a `<telegram_reply_markup>...</telegram_reply_markup>` control block containing callback-data buttons.
+- Admits Telegram `callback_query` button presses through the same trusted sender path and emits the selected `callback_data` back to Simon as a verified Telegram turn.
 - Keeps Shlomit modeled from day one, but dormant until her pairing and readiness gates pass.
 - Produces an upload bundle with canonical filenames:
   - `simon_telegram_channel.wasm`
@@ -65,7 +67,16 @@ URL: <direct HTTPS URL ending in simon_telegram_channel.tar.gz>
 
 Do not use the Settings import flow for this bundle; that endpoint expects a settings JSON export.
 
-For the next rebuild after the currently deployed `1.15` hotfix, publish a `1.16` bundle before changing live install/preseed URLs. The important addition is the new `durable_workspace_paths` list for:
+The currently committed `1.17` source adds inline keyboard callback support. Before changing live install/preseed URLs, build and prove the bundle locally with the inline-keyboard lab:
+
+```bash
+./scripts/build-ironclaw-upload-bundles.sh
+cd /Users/alonr/projects/simon-ironclaw-lab
+ICLAB_SIMON_TELEGRAM_BUNDLE_URL=file:///Users/alonr/projects/simon-docs/dist/ironclaw-upload/simon_telegram_channel.tar.gz \
+  iclab telegram inline-keyboard
+```
+
+The previous `1.16` bundle added the durable workspace paths for:
 
 - `state/simon_family_profiles.json`
 - `state/simon_telegram_chat_id__alon`
