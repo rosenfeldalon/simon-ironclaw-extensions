@@ -2,7 +2,7 @@
 
 This is the intended IronClaw-native wrapper for Simon's Telegram path.
 
-It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1` clone proved that the package installs and activates as `CHANNEL` when installed with explicit `kind: "wasm_channel"`. The current `1.17` layer keeps built-in-style owner and pairing admission, persists canonical Simon family identities and per-recipient Telegram routing state for the install pack, tells verified Telegram turns about the active Family Calendar read/write contract, and supports inline keyboard callback conversations.
+It is a custom WASM channel, not a normal tool. The baseline `0.2.10-baseline.1` clone proved that the package installs and activates as `CHANNEL` when installed with explicit `kind: "wasm_channel"`. The current `1.18` layer keeps built-in-style owner and pairing admission, persists canonical Simon family identities and per-recipient Telegram routing state for the install pack, tells verified Telegram turns about the active Family Calendar read/write contract, supports inline keyboard callback conversations, and hardens repeated reply-markup blocks so raw control tags are not shown to Telegram users.
 
 ## Current Scope
 
@@ -67,7 +67,7 @@ URL: <direct HTTPS URL ending in simon_telegram_channel.tar.gz>
 
 Do not use the Settings import flow for this bundle; that endpoint expects a settings JSON export.
 
-The currently committed `1.17` source adds inline keyboard callback support. Before changing live install/preseed URLs, build and prove the bundle locally with the inline-keyboard lab:
+The currently committed `1.18` source adds inline keyboard callback support and repeated-markup hardening. Before changing live install/preseed URLs, build and prove the bundle locally with the inline-keyboard lab:
 
 ```bash
 ./scripts/build-ironclaw-upload-bundles.sh

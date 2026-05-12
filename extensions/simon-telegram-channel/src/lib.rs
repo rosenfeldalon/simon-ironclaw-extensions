@@ -1621,10 +1621,13 @@ fn extract_telegram_reply_markup(content: &str) -> (String, Option<serde_json::V
     let Some(open_start) = content[..close_start].rfind(TELEGRAM_REPLY_MARKUP_OPEN) else {
         return (content.to_string(), None);
     };
+    let visible_end = content[..close_start]
+        .find(TELEGRAM_REPLY_MARKUP_OPEN)
+        .unwrap_or(open_start);
 
     let json_start = open_start + TELEGRAM_REPLY_MARKUP_OPEN.len();
     let markup_raw = content[json_start..close_start].trim();
-    let visible = content[..open_start].trim_end().to_string();
+    let visible = content[..visible_end].trim_end().to_string();
 
     match serde_json::from_str::<serde_json::Value>(markup_raw)
         .ok()
@@ -3638,6 +3641,33 @@ mod tests {
 
         assert_eq!(text, content);
         assert!(markup.is_none());
+    }
+
+    #[test]
+    fn test_extract_telegram_reply_markup_uses_final_block_and_strips_duplicate_blocks() {
+        let content = concat!(
+            "Who picks up Dori today?\n",
+            "<telegram_reply_markup>",
+            r#"{"inline_keyboard":[[{"text":"Me","callback_data":"old_choice"}]]}"#,
+            "</telegram_reply_markup>\n",
+            "Who picks up Dori today?\n",
+            "<telegram_reply_markup>",
+            r#"{"inline_keyboard":[[{"text":"Me","callback_data":"pickup_me"}],[{"text":"Nobody","callback_data":"pickup_none"}]]}"#,
+            "</telegram_reply_markup>"
+        );
+
+        let (text, markup) = extract_telegram_reply_markup(content);
+        let markup = markup.expect("expected inline keyboard markup");
+
+        assert_eq!(text, "Who picks up Dori today?");
+        assert_eq!(
+            markup["inline_keyboard"][0][0]["callback_data"],
+            "pickup_me"
+        );
+        assert_eq!(
+            markup["inline_keyboard"][1][0]["callback_data"],
+            "pickup_none"
+        );
     }
 
     #[test]
