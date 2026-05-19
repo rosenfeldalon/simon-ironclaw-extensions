@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-05-13 Simon pickup coordination bundle publish
+
+- Publishes `simon_pickup_coordination` `0.1.0` as a public bundle so Railway-hosted IronClaw can preseed the pickup coordination tool without depending on the private `simon-docs` repo.
+- Keeps the durable install-pack split intact: Telegram channel transport, family identity registry, daily briefing, setup, and pickup coordination each remain separate hosted artifacts.
+
 ## 2026-05-06 Simon Telegram durable workspace release
 
 - Publishes `simon_telegram_channel` `1.16` with restart-durable workspace persistence for the shared family registry and canonical per-user Telegram chat-id bindings.

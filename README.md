@@ -9,6 +9,7 @@ This repo intentionally contains only distributable extension source, release bu
 - `extensions/simon-telegram-channel/`: custom IronClaw Telegram channel package named `simon_telegram_channel`.
 - `extensions/simon-google-calendar-tool/`: Simon-specific Google Calendar read/write tool package named `simon_google_calendar`.
 - `extensions/simon-daily-briefing/`: deterministic Family daily briefing tool package named `simon_daily_briefing`.
+- `bundles/simon_pickup_coordination/`: public distributable bundle for Simon's pickup coordination tool.
 
 ## Latest Bundles
 
@@ -19,6 +20,7 @@ bundles/simon_telegram_channel/1.16.tar.gz
 bundles/simon_google_calendar/0.2.8.tar.gz
 bundles/simon_daily_briefing/0.2.1.tar.gz
 bundles/simon_family_identity/0.1.0.tar.gz
+bundles/simon_pickup_coordination/0.1.0.tar.gz
 bundles/simon_setup/0.1.0.tar.gz
 ```
 
@@ -29,6 +31,7 @@ https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironcl
 https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-durable-workspace-2026-05-06/bundles/simon_google_calendar/0.2.8.tar.gz
 https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-durable-workspace-2026-05-06/bundles/simon_daily_briefing/0.2.1.tar.gz
 https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-durable-workspace-2026-05-06/bundles/simon_family_identity/0.1.0.tar.gz
+https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-durable-workspace-2026-05-06/bundles/simon_pickup_coordination/0.1.0.tar.gz
 https://raw.githubusercontent.com/rosenfeldalon/simon-ironclaw-extensions/ironclaw-simon-telegram-durable-workspace-2026-05-06/bundles/simon_setup/0.1.0.tar.gz
 ```
 
